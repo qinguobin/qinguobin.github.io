@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.2.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"qinguobin.github.io","root":"/","scheme":"Muse","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="这是我的第一篇博文，在成功搭载了自己的博客之后，我发现博客搭建并不像安装注册软件这么简单，尤其是本地与云端之间的链接尤为繁多，小白容易遇难而退，所以我针对这种现象，把我搭载博客的方法精简再精简传授给你们，内容其实很简单，分为七个步骤 第一步：node安装下载地址 node进入官网，下载稳定版本，打开运行，一路next，win＋R调出命令窗口，打开cmd， 输入node -v,窗口显示版本号 第二步">
+<meta property="og:type" content="article">
+<meta property="og:title" content="教你如何手把手搭建自己的hexo（保姆级教程）">
+<meta property="og:url" content="https://qinguobin.github.io/2020/05/11/first-blog/index.html">
+<meta property="og:site_name" content="Hexo">
+<meta property="og:description" content="这是我的第一篇博文，在成功搭载了自己的博客之后，我发现博客搭建并不像安装注册软件这么简单，尤其是本地与云端之间的链接尤为繁多，小白容易遇难而退，所以我针对这种现象，把我搭载博客的方法精简再精简传授给你们，内容其实很简单，分为七个步骤 第一步：node安装下载地址 node进入官网，下载稳定版本，打开运行，一路next，win＋R调出命令窗口，打开cmd， 输入node -v,窗口显示版本号 第二步">
+<meta property="og:image" content="https://qinguobin.github.io/images/1.1.jpg">
+<meta property="og:image" content="https://qinguobin.github.io/images/1.3.png">
+<meta property="og:image" content="https://qinguobin.github.io/images/1.4.png">
+<meta property="og:image" content="https://qinguobin.github.io/images/2.0.png">
+<meta property="og:image" content="https://qinguobin.github.io/images/2.1.png">
+<meta property="og:image" content="https://qinguobin.github.io/images/2.7.jpg">
+<meta property="og:image" content="https://qinguobin.github.io/images/2.3.jpg">
+<meta property="og:image" content="https://qinguobin.github.io/images/2.5.jpg">
+<meta property="og:image" content="https://qinguobin.github.io/images/2.6.jpg">
+<meta property="og:image" content="https://qinguobin.github.io/images/1.3.png">
+<meta property="og:image" content="https://qinguobin.github.io/images/2.4.png">
+<meta property="og:image" content="https://qinguobin.github.io/images/4.1.png">
+<meta property="og:image" content="https://qinguobin.github.io/images/4.2.jpg">
+<meta property="og:image" content="https://qinguobin.github.io/images/4.3.jpg">
+<meta property="og:image" content="https://qinguobin.github.io/images/4.4.png">
+<meta property="og:image" content="https://qinguobin.github.io/images/4.5.png">
+<meta property="og:image" content="https://qinguobin.github.io/images/4.10.png">
+<meta property="og:image" content="https://qinguobin.github.io/images/4.11.jpg">
+<meta property="og:image" content="https://qinguobin.github.io/images/5.1.png">
+<meta property="og:image" content="https://qinguobin.github.io/images/5.2.jpg">
+<meta property="og:image" content="https://qinguobin.github.io/images/5.3.jpg">
+<meta property="og:image" content="https://qinguobin.github.io/images/5.4.jpg">
+<meta property="og:image" content="https://qinguobin.github.io/images/5.5.png">
+<meta property="og:image" content="https://qinguobin.github.io/images/5.6.png">
+<meta property="article:published_time" content="2020-05-11T15:55:06.782Z">
+<meta property="article:modified_time" content="2020-05-12T06:58:54.580Z">
+<meta property="article:author" content="qinguobin">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://qinguobin.github.io/images/1.1.jpg">
+
+<link rel="canonical" href="https://qinguobin.github.io/2020/05/11/first-blog/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-Hans'
+  };
+</script>
+
+  <title>教你如何手把手搭建自己的hexo（保姆级教程） | Hexo</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">Hexo</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="https://qinguobin.github.io/2026/10/17/wecom-read-test/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="qinguobin">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Hexo">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          实测记录 01 · 企业微信消息读取通道的四条路
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建于: 2026-10-17 10:00:00" itemprop="dateCreated datePublished" datetime="2026-10-17T10:00:00+08:00">2026-10-17</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="更新于: 2026-10-17 10:00:00" itemprop="dateModified" datetime="2026-10-17T10:00:00+08:00">2026-10-17</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+      <p>目标：证明"能否在不操作鼠标键盘的前提下，自动读到企业微信里别人发来的消息"。</p>
+<p>结论先行：<strong>只有「屏幕 OCR」一条路可用，且企微窗口必须真实显示在屏幕的「消息」页。</strong></p>
+<hr />
+<h2 id="路径一：客户端-UI-自动化（UIA）——-❌-死路"><a href="#路径一：客户端-UI-自动化（UIA）——-❌-死路" class="headerlink" title="路径一：客户端 UI 自动化（UIA）—— ❌ 死路"></a>路径一：客户端 UI 自动化（UIA）—— ❌ 死路</h2>
+<p>企业微信是 <strong>Flutter 渲染</strong>，Flutter 默认不向 Windows 的 UI Automation 暴露无障碍树。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">企微主窗口 class = WeWorkWindow</span><br><span class="line">  └─ 唯一子窗口 class = FLUTTERVIEW</span><br><span class="line">      └─ UIA 遍历结果：只有 2 个节点，Name 均为空</span><br></pre></td></tr></table></figure>
+<p>复现脚本：<code>tools/probe_windows.py</code></p>
+<p>直接后果：</p>
+<ul>
+<li>读不到任何一条聊天文本；</li>
+<li>也点不动任何会话（"右键 → 标记为已读"这类操作无从下手）；</li>
+<li>后面"勾掉后消角标"只能改走快捷键路线。</li>
+</ul>
+<hr />
+<h2 id="路径二：官方连接器（wecom-cli-1.3.4）——-❌-死路（企业层未开通）"><a href="#路径二：官方连接器（wecom-cli-1.3.4）——-❌-死路（企业层未开通）" class="headerlink" title="路径二：官方连接器（wecom-cli 1.3.4）—— ❌ 死路（企业层未开通）"></a>路径二：官方连接器（<code>wecom-cli</code> 1.3.4）—— ❌ 死路（企业层未开通）</h2>
+<p>连接器本身是通的（<code>auth show --status</code> → <code>authorized</code>），但读消息的接口被拦在企业层。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ wecom-cli chat messages list --chat-id 秦国彬  → errcode 853006</span><br><span class="line">$ wecom-cli chat messages list --chat-id wmXXXX  → errcode 853006</span><br><span class="line">$ wecom-cli chat messages list --chat-id &lt;机器人ID&gt; → errcode 853006</span><br><span class="line">$ wecom-cli chat messages list --chat-id test    → errcode 853006</span><br><span class="line">$ wecom-cli chat groups list                     → errcode 853006</span><br></pre></td></tr></table></figure>
+<p><strong>关键推理</strong>：4 个 ID 里有 3 个是瞎编的（<code>wmXXXX</code> / <code>test</code>），却返回同一个错误码，
+说明拦截发生在<strong>校验 chat-id 之前</strong>，是<strong>企业层级的功能开关</strong>，不是参数问题：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">this tool is not available for your corporation</span><br></pre></td></tr></table></figure>
+<p>通讯录接口同样被拦：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ wecom-cli contact users search --keywords &quot;秦&quot;  → errcode 850002</span><br></pre></td></tr></table></figure>
+<p><strong>全量普查</strong>（证明没有任何"收消息"命令存在）：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">wecom-cli message recv      → unrecognized subcommand</span><br><span class="line">wecom-cli message receive   → unrecognized subcommand</span><br><span class="line">wecom-cli message pull      → unrecognized subcommand</span><br><span class="line">wecom-cli message list      → unrecognized subcommand</span><br><span class="line">wecom-cli message aibot recv → unrecognized subcommand</span><br><span class="line">wecom-cli chat recv         → unrecognized subcommand</span><br><span class="line">wecom-cli webhook           → unrecognized subcommand</span><br><span class="line">wecom-cli callback          → unrecognized subcommand</span><br></pre></td></tr></table></figure>
+<p>唯一能正常返回的读类接口是 <code>message aibot sessions list</code>，但它只返回<strong>机器人自己</strong>
+会话的<strong>元数据</strong>，且当前为空，<strong>没有任何命令能读这些会话的消息正文</strong>：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">{&quot;sessions_count&quot;: 0}</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>顺带的坑：<code>wecom-cli</code> 只在 Git Bash 的 PATH 里，Windows 原生环境找不到，
+从 Python subprocess 调用必须写完整路径 <code>…\cli-connector-packages\wecom-cli.cmd</code>。</p>
+</blockquote>
+<p><strong>结论：连接器能发不能收。想让它能读，需企业管理员开通「会话内容存档」。</strong></p>
+<hr />
+<h2 id="路径三：Windows-系统通知（Toast）——-❌-死路（本机企微根本不弹）"><a href="#路径三：Windows-系统通知（Toast）——-❌-死路（本机企微根本不弹）" class="headerlink" title="路径三：Windows 系统通知（Toast）—— ❌ 死路（本机企微根本不弹）"></a>路径三：Windows 系统通知（Toast）—— ❌ 死路（本机企微根本不弹）</h2>
+<p>企微的通知是系统层渲染的，理论上不受 Flutter 限制，能被 UIA 捕获。实测：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">tools/probe_toast.py    运行 180 秒 → 0 条</span><br><span class="line">tools/probe_toast2.py   运行 240 秒 → 0 条</span><br><span class="line">tools/probe_toast2.py   运行 150 秒 → 0 条</span><br></pre></td></tr></table></figure>
+<p>150～240 秒内企微<strong>一个通知窗口都没弹过</strong>。（前提是用户确实在此期间发了消息。）</p>
+<p>之前还试过直接解析 Windows 通知历史库 <code>%LOCALAPPDATA%\…\wpndatabase.db</code>（ESE 格式），
+但 <code>pyesedb</code> 编译装不上，这条路也断了。</p>
+<hr />
+<h2 id="路径四：屏幕截图-+-OCR-——-⚠️-可用，但有硬边界"><a href="#路径四：屏幕截图-+-OCR-——-⚠️-可用，但有硬边界" class="headerlink" title="路径四：屏幕截图 + OCR —— ⚠️ 可用，但有硬边界"></a>路径四：屏幕截图 + OCR —— ⚠️ 可用，但有硬边界</h2>
+<p><strong>这是唯一走通的路。</strong> 原理：Flutter 虽然不暴露控件树，但它最终要把像素画到窗口上。</p>
+<h3 id="关键突破-1：用-PrintWindow-而非-BitBlt"><a href="#关键突破-1：用-PrintWindow-而非-BitBlt" class="headerlink" title="关键突破 1：用 PrintWindow 而非 BitBlt"></a>关键突破 1：用 <code>PrintWindow</code> 而非 <code>BitBlt</code></h3>
+<p>一开始用 <code>BitBlt</code> 抓窗口，抓到的是<strong>过期帧</strong>（画面永远停在若干分钟前），
+这是"用户发了消息、程序毫无反应"的直接原因。</p>
+<p>原因是 Flutter 走 DirectComposition 合成，普通 DC 拷贝拿不到当前内容。
+改用 <code>PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT)</code> <strong>强制重渲染</strong>后才拿到真实画面。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">PW_RENDERFULLCONTENT = 2</span><br><span class="line">ok = user32.PrintWindow(hwnd, mem, PW_RENDERFULLCONTENT)</span><br><span class="line">if not ok:</span><br><span class="line">    gdi32.BitBlt(mem, 0, 0, w, h, hdc, 0, 0, SRCCOPY)   # 回退</span><br></pre></td></tr></table></figure>
+<h3 id="关键突破-2：OCR-前先放大-2-倍"><a href="#关键突破-2：OCR-前先放大-2-倍" class="headerlink" title="关键突破 2：OCR 前先放大 2 倍"></a>关键突破 2：OCR 前先放大 2 倍</h3>
+<p>Windows OCR 对 12px 小字识别率很差。用 GDI <code>HALFTONE</code> 模式高质量放大 2 倍后，
+识别质量可用（人名偶有误差，消息正文基本准确）。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">gdi32.SetStretchBltMode(mem2, HALFTONE)</span><br><span class="line">gdi32.SetBrushOrgEx(mem2, 0, 0, 0)</span><br><span class="line">gdi32.StretchBlt(mem2, 0, 0, W, H, mem, 0, 0, w, h, SRCCOPY)</span><br></pre></td></tr></table></figure>
+<p>引擎用 Windows 自带的 <code>Windows.Media.Ocr</code>（<code>winsdk</code> 包），本机中文语言包可用：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">available OCR languages: [... 'zh-Hans-CN' ...]</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>坑：WinRT 的 <code>IAsyncOperation</code> 不能自己造 event loop 去 await，
+要用事件驱动的方式同步等待，否则卡死。</p>
+<p>另一个坑：Pillow 装不上（网络/编译问题），索性用标准库 <code>zlib</code> + <code>struct</code>
+手写 PNG 编码，零依赖。</p>
+</blockquote>
+<h3 id="硬边界：企微一旦&amp;quot;看不见&amp;quot;，画面就冻结"><a href="#硬边界：企微一旦&quot;看不见&quot;，画面就冻结" class="headerlink" title="硬边界：企微一旦&quot;看不见&quot;，画面就冻结"></a>硬边界：企微一旦"看不见"，画面就冻结</h3>
+<p>这是最要命的发现，用内容指纹（对 OCR 行做 md5）做的受控实验：</p>
+<table>
+<thead>
+<tr>
+<th>企微窗口状态</th>
+<th>现象</th>
+<th>结论</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>正常显示在屏幕</td>
+<td>指纹随新消息变化</td>
+<td>✅ 可用</td>
+</tr>
+<tr>
+<td><strong>最小化到任务栏</strong></td>
+<td>用户发消息后 70 秒，指纹纹丝不动</td>
+<td>❌ 冻结</td>
+</tr>
+<tr>
+<td><strong>移到屏幕外</strong>（未最小化）</td>
+<td>2.5 分钟无变化；移回屏幕内<strong>立刻</strong>变化</td>
+<td>❌ 冻结</td>
+</tr>
+<tr>
+<td>切到「工作台/文档」页</td>
+<td>没有会话列表可识别</td>
+<td>❌ 无内容</td>
+</tr>
+<tr>
+<td>被其它窗口完全盖住</td>
+<td>仍可读（PrintWindow 强制重渲染）</td>
+<td>✅ 可用</td>
+</tr>
+<tr>
+<td>在另一个虚拟桌面</td>
+<td>仍可读</td>
+<td>✅ 可用</td>
+</tr>
+</tbody>
+</table>
+<p>结论：<strong>企微必须"真的显示在屏幕上"，且停在「消息」页</strong>。
+被别的窗口盖住没关系（这是好消息——可以把它藏在后面）。</p>
+<p>所以"企微最小化也能实时读到"这个最初的判断是<strong>错的</strong>，后来被推翻。</p>
+    
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/05/11/first-blog/" rel="prev" title="教你如何手把手搭建自己的hexo（保姆级教程）">
+      <i class="fa fa-chevron-left"></i> 教你如何手把手搭建自己的hexo（保姆级教程）
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2026/10/17/wechat-read-test/" rel="next" title="实测记录 02 · 个人微信（WeChat）能不能读">
+      实测记录 02 · 个人微信（WeChat）能不能读 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          目录</li>
+        <li class="sidebar-nav-overview">
+          站点概况</li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#路径一：客户端-UI-自动化（UIA）——-❌-死路"><span class="nav-number">1.</span> <span class="nav-text">路径一：客户端 UI 自动化（UIA）—— ❌ 死路</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#路径二：官方连接器（wecom-cli-1.3.4）——-❌-死路（企业层未开通）"><span class="nav-number">2.</span> <span class="nav-text">路径二：官方连接器（wecom-cli 1.3.4）—— ❌ 死路（企业层未开通）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#路径三：Windows-系统通知（Toast）——-❌-死路（本机企微根本不弹）"><span class="nav-number">3.</span> <span class="nav-text">路径三：Windows 系统通知（Toast）—— ❌ 死路（本机企微根本不弹）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#路径四：屏幕截图-+-OCR-——-⚠️-可用，但有硬边界"><span class="nav-number">4.</span> <span class="nav-text">路径四：屏幕截图 + OCR —— ⚠️ 可用，但有硬边界</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#关键突破-1：用-PrintWindow-而非-BitBlt"><span class="nav-number">4.1.</span> <span class="nav-text">关键突破 1：用 PrintWindow 而非 BitBlt</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#关键突破-2：OCR-前先放大-2-倍"><span class="nav-number">4.2.</span> <span class="nav-text">关键突破 2：OCR 前先放大 2 倍</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#硬边界：企微一旦&amp;quot;看不见&amp;quot;，画面就冻结"><span class="nav-number">4.3.</span> <span class="nav-text">硬边界：企微一旦&quot;看不见&quot;，画面就冻结</span></a></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">qinguobin</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">2</span>
+          <span class="site-state-item-name">文章</span>
+        </a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2020</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">qinguobin</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> 驱动
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>
