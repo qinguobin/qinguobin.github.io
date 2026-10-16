@@ -144,7 +144,7 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
-    <link itemprop="mainEntityOfPage" href="https://qinguobin.github.io/2026/10/17/wecom-pitfalls/">
+    <link itemprop="mainEntityOfPage" href="https://qinguobin.github.io/2026/10/17/wecom-pin-tutorial/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="image" content="/images/avatar.gif">
@@ -158,7 +158,7 @@
       <header class="post-header">
         <h2 class="post-title" itemprop="name headline">
           
-            <a href="/2026/10/17/wecom-pitfalls/" class="post-title-link" itemprop="url">踩坑全记录：34 个坑</a>
+            <a href="/2026/10/17/wecom-pin-tutorial/" class="post-title-link" itemprop="url">教你如何手把手把企业微信消息钉到桌面（保姆级教程）</a>
         </h2>
 
         <div class="post-meta">
@@ -168,7 +168,7 @@
               </span>
               <span class="post-meta-item-text">发表于</span>
 
-              <time title="创建于: 2026-10-17 10:50:00" itemprop="dateCreated datePublished" datetime="2026-10-17T10:50:00+08:00">2026-10-17</time>
+              <time title="创建于: 2026-10-17 11:30:00" itemprop="dateCreated datePublished" datetime="2026-10-17T11:30:00+08:00">2026-10-17</time>
             </span>
 
           
@@ -180,1259 +180,234 @@
     
     
     <div class="post-body" itemprop="articleBody">
-      <p>从"想做个企微消息提醒"到交付，踩了 30 多个坑。按类别整理，每类都写了
-<strong>症状 → 根因 → 解法</strong>，你可以直接跳到需要的部分。</p>
+      <p>这是我的第二篇博文。上一篇教大家搭了自己的博客，这一篇记一个真做出来的东西：
+一个常驻桌面最上层的小组件，把企业微信里<strong>需要你处理</strong>的消息自动钉在上面，
+处理完一键勾掉，顺带把企微里的未读红点也消掉。</p>
+<p>动工之前我把丑话说在前面：<strong>企业微信的聊天记录，官方不让你读。</strong>
+这篇教程会把"哪几条路走不通、哪条路能走通、边界在哪里"全部用实测讲清楚。
+你照着做，半天能跑起来；看完还能少撞几天墙。</p>
+<p>篇幅有点长，分为九步。</p>
 <hr />
-<h2 id="一、环境与依赖"><a href="#一、环境与依赖" class="headerlink" title="一、环境与依赖"></a>一、环境与依赖</h2>
-<h3 id="1.-WorkBuddy-自带的-Python-3.13-没有-tkinter"><a href="#1.-WorkBuddy-自带的-Python-3.13-没有-tkinter" class="headerlink" title="1. WorkBuddy 自带的 Python 3.13 没有 tkinter"></a>1. WorkBuddy 自带的 Python 3.13 没有 tkinter</h3>
-<p><strong>症状</strong>：小组件（唯一可选的 GUI 方案）一跑就 <code>ModuleNotFoundError: No module named 'tkinter'</code>。
-<strong>根因</strong>：官方 Python 3.13 的 Windows 构建里，tkinter 是可选组件，这个版本没带。
-<strong>解法</strong>：静默安装官方 Python 3.12 到 D 盘（顺带满足"软件不占 C 盘"的要求）：</p>
-<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">python-installer.exe /quiet InstallAllUsers=0 TargetDir=D:\Python312 `</span><br><span class="line">  AssociateFiles=0 Shortcuts=0 Include_launcher=0 PrependPath=0 Include_tcltk=1</span><br></pre></td></tr></table></figure>
-<p><code>Include_tcltk=1</code> 就是关键——默认静默安装<strong>不带</strong> tk。</p>
-<h3 id="2.-venv-反复创建失败"><a href="#2.-venv-反复创建失败" class="headerlink" title="2. venv 反复创建失败"></a>2. venv 反复创建失败</h3>
-<p><strong>症状</strong>：<code>python -m venv</code> 在 D 盘上死活创建不出来，换 <code>--clear</code> 也不行。
-<strong>根因</strong>：环境限制，venv 的创建路径/权限在本机不通。
-<strong>解法</strong>：<strong>放弃 venv</strong>，直接把依赖装进 <code>D:\Python312</code> 本体。
-代价：遗留了一个 60MB 的废弃目录（已重命名为 <code>_unused_venv_can_delete</code> 提示可删）。</p>
-<h3 id="3.-Pillow-装不上"><a href="#3.-Pillow-装不上" class="headerlink" title="3. Pillow 装不上"></a>3. Pillow 装不上</h3>
-<p><strong>症状</strong>：<code>pip install pillow</code> 失败。
-<strong>解法</strong>：不装了。用标准库 <code>zlib</code> + <code>struct</code> 手写 PNG 编码，30 行搞定，零依赖。</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">def png_bytes(bgra, w, h, stride):</span><br><span class="line">    raw = b&quot;&quot;</span><br><span class="line">    for y in range(h):</span><br><span class="line">        raw += b&quot;\x00&quot; + bgra[y * stride:(y + 1) * stride]</span><br><span class="line">    return (b&quot;\x89PNG\r\n\x1a\n&quot;</span><br><span class="line">            + _chunk(b&quot;IHDR&quot;, struct.pack(&quot;&gt;IIBBBBB&quot;, w, h, 8, 6, 0, 0, 0))</span><br><span class="line">            + _chunk(b&quot;IDAT&quot;, zlib.compress(raw, 6))</span><br><span class="line">            + _chunk(b&quot;IEND&quot;, b&quot;&quot;))</span><br></pre></td></tr></table></figure>
-<h3 id="4.-pyesedb-编译装不上"><a href="#4.-pyesedb-编译装不上" class="headerlink" title="4. pyesedb 编译装不上"></a>4. <code>pyesedb</code> 编译装不上</h3>
-<p><strong>症状</strong>：想直接读 Windows 通知历史库 <code>wpndatabase.db</code>（ESE 格式），<code>pip install pyesedb</code> 失败。
-<strong>影响</strong>：通知历史这条路直接放弃（后来证明这条路本来也是死路）。</p>
-<h3 id="5.-wecom-cli-不在-Windows-的-PATH-里"><a href="#5.-wecom-cli-不在-Windows-的-PATH-里" class="headerlink" title="5. wecom-cli 不在 Windows 的 PATH 里"></a>5. <code>wecom-cli</code> 不在 Windows 的 PATH 里</h3>
-<p><strong>症状</strong>：Python 的 <code>subprocess.run(["wecom-cli", ...])</code> 找不到命令，
-但在 Git Bash 里直接敲却能用。
-<strong>根因</strong>：它只加到了 Git Bash 的环境，没进系统 PATH。
-<strong>解法</strong>：调用时写完整路径 + <code>.cmd</code> 后缀：</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">r&quot;C:\Users\…\binaries\node\cli-connector-packages\wecom-cli.cmd&quot;</span><br></pre></td></tr></table></figure>
-<hr />
-<h2 id="二、64-位下的-ctypes-经典陷阱"><a href="#二、64-位下的-ctypes-经典陷阱" class="headerlink" title="二、64 位下的 ctypes 经典陷阱"></a>二、64 位下的 ctypes 经典陷阱</h2>
-<h3 id="6.-剪贴板永远读到空字符串-★-最隐蔽的一个"><a href="#6.-剪贴板永远读到空字符串-★-最隐蔽的一个" class="headerlink" title="6. 剪贴板永远读到空字符串 ★ 最隐蔽的一个"></a>6. 剪贴板永远读到空字符串 ★ 最隐蔽的一个</h3>
-<p><strong>症状</strong>：写入剪贴板后立刻读回，永远是 <code>""</code>，但系统剪贴板里内容是对的。
-<strong>根因</strong>：<strong>64 位下 ctypes 函数默认 <code>restype</code> 是 <code>c_int</code>（32 位）</strong>，
-<code>GetClipboardData</code> 和 <code>GlobalLock</code> 返回的 64 位句柄被<strong>截断成低 32 位</strong>，
-拿到的是个野指针。</p>
-<p><strong>解法</strong>：必须显式声明返回类型。</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"># 错误</span><br><span class="line">user32.GetClipboardData(CF_UNICODETEXT)</span><br><span class="line"></span><br><span class="line"># 正确</span><br><span class="line">user32.GetClipboardData.restype = ctypes.c_void_p   # 或 HANDLE</span><br><span class="line">kernel32.GlobalLock.restype = ctypes.c_void_p</span><br></pre></td></tr></table></figure>
-<p>这个 bug 害得我一度误判"<code>Ctrl+F</code> 唤起企微搜索框失败"——其实是回读验证的
-代码本身有问题，快捷键一直是好的。</p>
-<blockquote>
-<p><strong>通用教训</strong>：在 64 位 Windows 上，任何返回指针/句柄的 Win32 函数，
-用 ctypes 调都必须显式设 <code>restype</code>，否则句柄会被截断。</p>
-</blockquote>
-<h3 id="7.-BITMAPINFOHEADER-打包格式错"><a href="#7.-BITMAPINFOHEADER-打包格式错" class="headerlink" title="7. BITMAPINFOHEADER 打包格式错"></a>7. <code>BITMAPINFOHEADER</code> 打包格式错</h3>
-<p><strong>症状</strong>：<code>GetDIBits</code> 出来的图是花的或全黑。
-<strong>根因</strong>：<code>struct.pack</code> 格式串必须是小端 <code>&lt;IiiHHIIiiII</code>，写成 <code>"IiiHHIIiiII"</code>
-（本机字节序）在某些场景下会错位。
-<strong>解法</strong>：显式加 <code>&lt;</code> 前缀。</p>
-<hr />
-<h2 id="三、读取企业微信消息"><a href="#三、读取企业微信消息" class="headerlink" title="三、读取企业微信消息"></a>三、读取企业微信消息</h2>
-<h3 id="8.-企微是-Flutter-渲染，UIA-只能读到-2-个空节点-★-根本性障碍"><a href="#8.-企微是-Flutter-渲染，UIA-只能读到-2-个空节点-★-根本性障碍" class="headerlink" title="8. 企微是 Flutter 渲染，UIA 只能读到 2 个空节点 ★ 根本性障碍"></a>8. 企微是 Flutter 渲染，UIA 只能读到 2 个空节点 ★ 根本性障碍</h3>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">企微主窗口 class = WeWorkWindow</span><br><span class="line">  └─ 唯一子窗口 class = FLUTTERVIEW</span><br><span class="line">      └─ UIA: 2 个节点，Name 全空</span><br></pre></td></tr></table></figure>
-<p><strong>影响</strong>：</p>
-<ul>
-<li>读不到任何聊天文本 → 无法自动监听消息；</li>
-<li>点不动任何会话 → "右键标记为已读"这条路废掉，改走快捷键。</li>
-</ul>
-<p><strong>绕过</strong>：Flutter 最终要把像素画到窗口上 → 走屏幕截图 + OCR。</p>
-<h3 id="9.-会话存档接口-853006：企业没开通，不是你没授权"><a href="#9.-会话存档接口-853006：企业没开通，不是你没授权" class="headerlink" title="9. 会话存档接口 853006：企业没开通，不是你没授权"></a>9. 会话存档接口 853006：企业没开通，不是你没授权</h3>
-<p><strong>症状</strong>：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">wecom-cli chat messages list --chat-id &lt;任意值&gt;  → errcode 853006</span><br><span class="line">this tool is not available for your corporation</span><br></pre></td></tr></table></figure>
-<p><strong>关键推理（省了我半天时间）</strong>：我用 4 个 chat-id 试，其中 3 个是瞎编的
-（<code>wmXXXX</code> / <code>test</code>），<strong>全部返回同一个错误码</strong>。这说明拦截发生在
-<strong>校验 chat-id 之前</strong>——是<strong>企业层级的功能开关</strong>，不是参数问题、也不是授权问题。</p>
-<p><strong>结论</strong>：连接器只能<strong>发</strong>消息，<strong>读不了</strong>你和同事的聊天记录。
-想让它能读，需要<strong>企业管理员</strong>去开「会话内容存档」（付费功能）。</p>
-<h3 id="10.-全量普查证明：连接器里根本没有&amp;quot;收消息&amp;quot;命令"><a href="#10.-全量普查证明：连接器里根本没有&quot;收消息&quot;命令" class="headerlink" title="10. 全量普查证明：连接器里根本没有&quot;收消息&quot;命令"></a>10. 全量普查证明：连接器里根本没有"收消息"命令</h3>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">wecom-cli message recv / receive / pull / list</span><br><span class="line">wecom-cli message aibot recv / messages</span><br><span class="line">wecom-cli chat recv / receive</span><br><span class="line">wecom-cli webhook / callback</span><br><span class="line">→ 全部 &quot;unrecognized subcommand&quot;</span><br></pre></td></tr></table></figure>
-<p>唯一能用的读类接口 <code>message aibot sessions list</code> 只返回<strong>机器人自己</strong>会话的
-元数据（<code>chat_id</code> / <code>chat_name</code> / <code>chat_type</code> / <code>last_msg_time</code>），
-<strong>没有任何命令能读这些会话的消息正文</strong>。</p>
-<h3 id="11.-通讯录接口-850002"><a href="#11.-通讯录接口-850002" class="headerlink" title="11. 通讯录接口 850002"></a>11. 通讯录接口 850002</h3>
-<p><code>contact users search</code> → 850002，机器人未被授权「通讯录」。
-（但如 §9 所述，就算授了权，853006 依然在，聊天记录还是读不了。）</p>
-<h3 id="12.-企微在本机根本不弹系统通知"><a href="#12.-企微在本机根本不弹系统通知" class="headerlink" title="12. 企微在本机根本不弹系统通知"></a>12. 企微在本机根本不弹系统通知</h3>
-<p><strong>症状</strong>：通知探针跑 150s / 180s / 240s，一条企微通知都没抓到。
-<strong>影响</strong>："捕获系统 Toast 通知"这条路断了——原本以为它是唯一能绕开
-Flutter 限制的通道（通知是系统渲染的）。</p>
-<h3 id="13.-抓到的是过期画面-——-&amp;quot;发了消息没反应&amp;quot;的真凶-★"><a href="#13.-抓到的是过期画面-——-&quot;发了消息没反应&quot;的真凶-★" class="headerlink" title="13. 抓到的是过期画面 —— &quot;发了消息没反应&quot;的真凶 ★"></a>13. 抓到的是过期画面 —— "发了消息没反应"的真凶 ★</h3>
-<p><strong>症状</strong>：用户发消息，程序毫无反应；手动截图看画面是对的。
-<strong>根因</strong>：用 <code>BitBlt</code> 抓窗口，对 Flutter（走 DirectComposition 合成）
-只能拿到<strong>过期的那一帧</strong>。</p>
-<p><strong>解法</strong>：用 <code>PrintWindow</code> 的 <code>PW_RENDERFULLCONTENT</code> 标志强制重渲染。</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">PW_RENDERFULLCONTENT = 2</span><br><span class="line">ok = user32.PrintWindow(hwnd, mem, PW_RENDERFULLCONTENT)</span><br><span class="line">if not ok:</span><br><span class="line">    gdi32.BitBlt(mem, 0, 0, w, h, hdc, 0, 0, SRCCOPY)  # 回退</span><br></pre></td></tr></table></figure>
-<h3 id="14.-最小化-/-移到屏幕外-=-画面冻结-★-推翻了我的错误判断"><a href="#14.-最小化-/-移到屏幕外-=-画面冻结-★-推翻了我的错误判断" class="headerlink" title="14. 最小化 / 移到屏幕外 = 画面冻结 ★ 推翻了我的错误判断"></a>14. 最小化 / 移到屏幕外 = 画面冻结 ★ 推翻了我的错误判断</h3>
-<p>我最初以为"用 PrintWindow 连最小化也能读到"，实测<strong>是错的</strong>。
-用内容指纹做的受控实验（用户发消息，我盯着指纹变不变）：</p>
+<h2 id="第一步：先摸清企微的底，再决定怎么做"><a href="#第一步：先摸清企微的底，再决定怎么做" class="headerlink" title="第一步：先摸清企微的底，再决定怎么做"></a>第一步：先摸清企微的底，再决定怎么做</h2>
+<p>需求一句话：企微收到消息 → 判断要不要你处理 → 钉在桌面。听起来不难，
+但我动工前先把四条读取通道全验证了一遍，<strong>三条是死的</strong>：</p>
 <table>
 <thead>
 <tr>
-<th>企微窗口状态</th>
-<th>结果</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>显示在屏幕 + 消息页</td>
-<td>✅ 指纹随新消息变化</td>
-</tr>
-<tr>
-<td><strong>最小化到任务栏</strong></td>
-<td>❌ 70 秒纹丝不动</td>
-</tr>
-<tr>
-<td><strong>移到屏幕外</strong>（未最小化）</td>
-<td>❌ 2.5 分钟不动，移回屏幕<strong>立刻</strong>变化</td>
-</tr>
-<tr>
-<td>切到「工作台/文档」页</td>
-<td>❌ 没有会话列表</td>
-</tr>
-<tr>
-<td>被其它窗口盖住</td>
-<td>✅ 仍可读</td>
-</tr>
-<tr>
-<td>在另一个虚拟桌面</td>
-<td>✅ 仍可读</td>
-</tr>
-</tbody>
-</table>
-<p><strong>好消息</strong>：被盖住 / 在别的虚拟桌面都<strong>不影响</strong>，所以可以把它藏在后面眼不见为净。</p>
-<h3 id="15.-最小化时-GetWindowRect-返回的坐标不靠谱"><a href="#15.-最小化时-GetWindowRect-返回的坐标不靠谱" class="headerlink" title="15. 最小化时 GetWindowRect 返回的坐标不靠谱"></a>15. 最小化时 <code>GetWindowRect</code> 返回的坐标不靠谱</h3>
-<p><strong>症状</strong>：截图尺寸塌成 314x50（微信）或 -32000（企微）。
-<strong>根因</strong>：最小化时 <code>GetWindowRect</code> 返回的是任务栏图标的小矩形，
-或 <code>(-32000, -32000)</code> 这种"不存在"坐标。</p>
-<p><strong>解法</strong>：用 <code>GetWindowPlacement</code> 拿 <code>rcNormalPosition</code>（还原后的矩形）：</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"># 只判断 -32000 会漏——微信最小化返回的是 314x50</span><br><span class="line">if r.left &lt;= -20000 or r.top &lt;= -20000 or user32.IsIconic(hwnd):</span><br><span class="line">    plc = WINDOWPLACEMENT()</span><br><span class="line">    plc.length = ctypes.sizeof(plc)</span><br><span class="line">    if user32.GetWindowPlacement(hwnd, ctypes.byref(plc)):</span><br><span class="line">        r = plc.rcNormalPosition</span><br></pre></td></tr></table></figure>
-<p><code>IsIconic(hwnd)</code> 这个判断是后来测微信时才补上的。</p>
-<h3 id="16.-误把「工作台」页面当成消息列表，生成了一堆垃圾待办"><a href="#16.-误把「工作台」页面当成消息列表，生成了一堆垃圾待办" class="headerlink" title="16. 误把「工作台」页面当成消息列表，生成了一堆垃圾待办"></a>16. 误把「工作台」页面当成消息列表，生成了一堆垃圾待办</h3>
-<p><strong>症状</strong>：小组件显示"待处理 2 条"，但点开什么都没有。
-<strong>根因</strong>：企微有多个标题都叫「企业微信」的窗口，程序没判断当前停在哪个页，
-把工作台页的"审批""智能机器人""打卡"当成了消息。
-<strong>解法</strong>：加 <code>is_chat_view()</code> 判断——靠<strong>会话列表右侧的时间戳</strong>特征
-（<code>刚刚</code> / <code>xx分钟前</code> / <code>昨天</code> / <code>xx:xx</code>）来确认当前是消息页，
-切到工作台/文档页自动跳过并清空基线。</p>
-<blockquote>
-<p>第一版判断是找顶部的"未读/@我/单聊/群聊"筛选条，<strong>太严了</strong>，
-实测布局里筛选条位置对不上，导致本该能读的也跳过了。改用时间戳特征才稳。</p>
-</blockquote>
-<h3 id="17.-OCR-对-12px-小字识别率很差"><a href="#17.-OCR-对-12px-小字识别率很差" class="headerlink" title="17. OCR 对 12px 小字识别率很差"></a>17. OCR 对 12px 小字识别率很差</h3>
-<p>截图原图很清晰，但 OCR 出来一堆错字。
-<strong>解法</strong>：GDI <code>HALFTONE</code> 模式高质量放大 <strong>2 倍</strong>再送 OCR，识别质量可用
-（人名偶有误差，消息正文基本准确）。放大 3 倍提升有限但更慢。</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">gdi32.SetStretchBltMode(mem2, HALFTONE)</span><br><span class="line">gdi32.SetBrushOrgEx(mem2, 0, 0, 0)</span><br><span class="line">gdi32.StretchBlt(mem2, 0, 0, W, H, mem, 0, 0, w, h, SRCCOPY)</span><br></pre></td></tr></table></figure>
-<h3 id="18.-WinRT-的-IAsyncOperation-不能自己造-event-loop"><a href="#18.-WinRT-的-IAsyncOperation-不能自己造-event-loop" class="headerlink" title="18. WinRT 的 IAsyncOperation 不能自己造 event loop"></a>18. WinRT 的 IAsyncOperation 不能自己造 event loop</h3>
-<p><strong>症状</strong>：用 <code>asyncio.new_event_loop().run_until_complete(await ...)</code> 卡死。
-<strong>解法</strong>：改用事件驱动同步等待（设事件 → 触发 → 等待 → 取结果）。</p>
-<h3 id="19.-OCR-出来的名字是错字，@我-判断漏判"><a href="#19.-OCR-出来的名字是错字，@我-判断漏判" class="headerlink" title="19. OCR 出来的名字是错字，@我 判断漏判"></a>19. OCR 出来的名字是错字，@我 判断漏判</h3>
-<p><strong>症状</strong>：<code>@秦国彬</code> 被 OCR 成 <code>@泰国彬</code> / <code>@孬王彬</code> / <code>@癸国彬</code>，精确匹配全部漏掉。
-<strong>解法</strong>：<code>difflib</code> 模糊匹配，相似度阈值内都算命中。
-（代价：群名也可能被误匹配，所以同时保留了 <code>group_senders</code> 白名单。）</p>
-<h3 id="20.-截图有透明通道时-OCR-拿到全透明图"><a href="#20.-截图有透明通道时-OCR-拿到全透明图" class="headerlink" title="20. 截图有透明通道时 OCR 拿到全透明图"></a>20. 截图有透明通道时 OCR 拿到全透明图</h3>
-<p><strong>症状</strong>：OCR 返回 0 行。
-<strong>根因</strong>：窗口截图 alpha 通道是 0，OCR 引擎认为整图透明。
-<strong>解法</strong>：强制把 alpha 填成不透明：</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ba = bytearray(buf)</span><br><span class="line">ba[3::4] = b&quot;\xff&quot; * (sw * sh)</span><br></pre></td></tr></table></figure>
-<hr />
-<h2 id="四、桌面小组件（tkinter）"><a href="#四、桌面小组件（tkinter）" class="headerlink" title="四、桌面小组件（tkinter）"></a>四、桌面小组件（tkinter）</h2>
-<h3 id="21.-收起时把-34px-高度存进了-geometry"><a href="#21.-收起时把-34px-高度存进了-geometry" class="headerlink" title="21. 收起时把 34px 高度存进了 geometry"></a>21. 收起时把 34px 高度存进了 geometry</h3>
-<p><strong>症状</strong>：收起小组件后重启，窗口只剩一条标题栏，内容全没了。
-<strong>根因</strong>：收起状态也保存了窗口尺寸（34px = 只有标题条的高度）。
-<strong>解法</strong>：收起状态<strong>不保存尺寸</strong>，且载入几何时强制最小高度 200px。</p>
-<h3 id="22.-收起后只能双击展开，用户以为点不动"><a href="#22.-收起后只能双击展开，用户以为点不动" class="headerlink" title="22. 收起后只能双击展开，用户以为点不动"></a>22. 收起后只能双击展开，用户以为点不动</h3>
-<p><strong>症状</strong>：用户说"点击也没有反应"。
-<strong>解法</strong>：收起时改成<strong>单击</strong>标题条即展开。（原来绑的是双击，且没有任何提示。）</p>
-<h3 id="23.-卡片合并后，勾掉单条时删除线画错了"><a href="#23.-卡片合并后，勾掉单条时删除线画错了" class="headerlink" title="23. 卡片合并后，勾掉单条时删除线画错了"></a>23. 卡片合并后，勾掉单条时删除线画错了</h3>
-<p><strong>症状</strong>：勾掉后连复选框本身也被划掉。
-<strong>解法</strong>：遍历行内 Label 时跳过 <code>☑</code> 本身。</p>
-<h3 id="24.-卡片合并的-pack-顺序"><a href="#24.-卡片合并的-pack-顺序" class="headerlink" title="24. 卡片合并的 pack 顺序"></a>24. 卡片合并的 pack 顺序</h3>
-<p>收起/展开时 <code>list_frame</code> 和 <code>footer</code> 的 pack 顺序会乱，要用 <code>before=</code> 指定顺序。</p>
-<hr />
-<h2 id="五、消息判定"><a href="#五、消息判定" class="headerlink" title="五、消息判定"></a>五、消息判定</h2>
-<h3 id="25.-关键词把「无需回复」误判成需要处理"><a href="#25.-关键词把「无需回复」误判成需要处理" class="headerlink" title="25. 关键词把「无需回复」误判成需要处理"></a>25. 关键词把「无需回复」误判成需要处理</h3>
-<p><strong>症状</strong>："公司年会照片已上传，<strong>无需回复</strong>" → 判定为待办。
-<strong>根因</strong>：命中了"回复"两个字。
-<strong>解法</strong>：加否定词排除——先扫否定词（<code>无需</code> / <code>不用</code> / <code>不必</code> / <code>已通过</code> …），
-命中就直接判为无需处理。</p>
-<h3 id="26.-「@所有人」被当成「@我」"><a href="#26.-「@所有人」被当成「@我」" class="headerlink" title="26. 「@所有人」被当成「@我」"></a>26. 「@所有人」被当成「@我」</h3>
-<p><strong>症状</strong>：群里的 <code>@所有人 明天团建</code> 也被钉到桌面。
-<strong>解法</strong>：只认 <code>@你本人</code>（昵称来自 <code>config.json</code> 的 <code>filter.my_names</code>），
-<code>@所有人</code> / <code>@全体成员</code> 一律不算。AI 提示词里也写死了这条规则。</p>
-<h3 id="27.-勾掉后消角标：Flutter-下-UIA-无效"><a href="#27.-勾掉后消角标：Flutter-下-UIA-无效" class="headerlink" title="27. 勾掉后消角标：Flutter 下 UIA 无效"></a>27. 勾掉后消角标：Flutter 下 UIA 无效</h3>
-<p>企微没有开放"标记已读"的接口。两级策略：</p>
-<ol>
-<li>UIA 找会话 → 右键 → "标记为已读"（Flutter 下<strong>基本用不上</strong>）</li>
-<li><strong>快捷键（主路线）</strong>：激活企微 → <code>Ctrl+F</code> 唤起搜索 → 粘贴会话名 →
-   回车打开会话 → 角标清除 → <code>Esc</code> → 切回原窗口</li>
-</ol>
-<p><code>Ctrl+F</code> 这条实测通过（用"选中 → 复制回读"的方式验证，避免截图验证）。
-不灵时可换 <code>Ctrl+K</code>，或直接设 <code>click_search_offset</code> 用鼠标点搜索框。</p>
-<hr />
-<h2 id="六、进程与自启动"><a href="#六、进程与自启动" class="headerlink" title="六、进程与自启动"></a>六、进程与自启动</h2>
-<h3 id="28.-自动化环境拉起的进程全部存活不下来-★-影响交付方式"><a href="#28.-自动化环境拉起的进程全部存活不下来-★-影响交付方式" class="headerlink" title="28. 自动化环境拉起的进程全部存活不下来 ★ 影响交付方式"></a>28. 自动化环境拉起的进程全部存活不下来 ★ 影响交付方式</h3>
-<p><strong>症状</strong>：程序明明启动了、日志也写了，过一会儿就没了。
-<strong>实测</strong>：</p>
-<table>
-<thead>
-<tr>
-<th>方式</th>
-<th>结果</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>Start-Process</code></td>
-<td>被安全策略拦截</td>
-</tr>
-<tr>
-<td><code>wscript.exe</code> 跑 VBS</td>
-<td>被拦截</td>
-</tr>
-<tr>
-<td><code>schtasks /create /sc onlogon</code></td>
-<td>直接被拉黑</td>
-</tr>
-</tbody>
-</table>
-<p><strong>解法</strong>：<strong>必须由用户双击 <code>Start.bat</code></strong> 启动，或等下次开机（Startup 的 VBS 已装好）。
-这条直接改变了交付方式——我不能替用户把程序跑起来。</p>
-<h3 id="29.-多个实例同时跑导致重复捕获"><a href="#29.-多个实例同时跑导致重复捕获" class="headerlink" title="29. 多个实例同时跑导致重复捕获"></a>29. 多个实例同时跑导致重复捕获</h3>
-<p><strong>症状</strong>：日志里每条消息重复出现、CPU 飙高。
-<strong>根因</strong>：反复重启时旧进程没杀干净。
-<strong>解法</strong>：用 <code>WMI Win32_Process</code> 按命令行特征批量清理，且每次重启前删 <code>app.pid</code>。</p>
-<h3 id="30.-改了代码但进程里跑的是旧版本"><a href="#30.-改了代码但进程里跑的是旧版本" class="headerlink" title="30. 改了代码但进程里跑的是旧版本"></a>30. 改了代码但进程里跑的是旧版本</h3>
-<p><strong>症状</strong>：traceback 的行号跟源码对不上，改了就是不生效。
-<strong>解法</strong>：重启前先删 <code>__pycache__</code>。</p>
-<hr />
-<h2 id="七、个人微信"><a href="#七、个人微信" class="headerlink" title="七、个人微信"></a>七、个人微信</h2>
-<h3 id="31.-个人微信官方就没有开放读取聊天记录的-API-★-根本障碍"><a href="#31.-个人微信官方就没有开放读取聊天记录的-API-★-根本障碍" class="headerlink" title="31. 个人微信官方就没有开放读取聊天记录的 API ★ 根本障碍"></a>31. 个人微信官方就没有开放读取聊天记录的 API ★ 根本障碍</h3>
-<p>微信只开放了三类 API：<strong>公众号、小程序、企业微信</strong>，<strong>个人账号的聊天记录不在其中</strong>。
-所以<strong>不存在"授权某个应用读我的微信消息"这个动作</strong>——
-用户问"需要授权吗"，答案是"不需要，也无处可授权"。</p>
-<h3 id="32.-微信-4.0-是-Qt-+-自绘，UIA-同样空"><a href="#32.-微信-4.0-是-Qt-+-自绘，UIA-同样空" class="headerlink" title="32. 微信 4.0 是 Qt + 自绘，UIA 同样空"></a>32. 微信 4.0 是 Qt + 自绘，UIA 同样空</h3>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">主窗口 class = Qt51514QWindowIcon</span><br><span class="line">  └─ 唯一子窗口 class = MMUIRenderSubWindow</span><br><span class="line">      └─ UIA: 0 个节点</span><br></pre></td></tr></table></figure>
-<h3 id="33.-微信本地数据库全部-SQLCipher-加密"><a href="#33.-微信本地数据库全部-SQLCipher-加密" class="headerlink" title="33. 微信本地数据库全部 SQLCipher 加密"></a>33. 微信本地数据库全部 SQLCipher 加密</h3>
-<p><code>Documents\WeChat Files\&lt;wxid&gt;\Msg\</code> 下 12 个库（含 <code>ChatMsg.db</code>），
-文件头全部不是 <code>SQLite format 3</code>。</p>
-<h3 id="34.-微信最小化时截图是纯色空图"><a href="#34.-微信最小化时截图是纯色空图" class="headerlink" title="34. 微信最小化时截图是纯色空图"></a>34. 微信最小化时截图是纯色空图</h3>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">截图 1358x1716，采样像素种类数 = 2（值只有 0 和 255），OCR 0 行</span><br></pre></td></tr></table></figure>
-<hr />
-<h2 id="最值钱的三个教训"><a href="#最值钱的三个教训" class="headerlink" title="最值钱的三个教训"></a>最值钱的三个教训</h2>
-<ol>
-<li>
-<p><strong>先证明"能不能"，再动手做。</strong> 我在"企微最小化也能读到"这个错误判断上
-   浪费了最多时间——先做 30 秒的受控实验（内容指纹），能省掉后面几小时。</p>
-</li>
-<li>
-<p><strong>64 位 + ctypes 必须显式声明 <code>restype</code>。</strong> 句柄截断的表现极具迷惑性
-   （读出来是空字符串，看起来像"功能不支持"）。</p>
-</li>
-<li>
-<p><strong>报错码要会读。</strong> 853006 用 4 个不同 ID 测试结果相同 → 立刻能断定是
-   企业层开关，而不是"我的参数写错了"，省掉了无意义的调试。</p>
-</li>
-</ol>
-    
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
-      
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
-    <link itemprop="mainEntityOfPage" href="https://qinguobin.github.io/2026/10/17/wecom-dev-journey/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="qinguobin">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Hexo">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          
-            <a href="/2026/10/17/wecom-dev-journey/" class="post-title-link" itemprop="url">全过程记录：把企微消息钉到桌面</a>
-        </h2>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建于: 2026-10-17 10:40:00" itemprop="dateCreated datePublished" datetime="2026-10-17T10:40:00+08:00">2026-10-17</time>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-      <p>一个"把企业微信消息钉到桌面"的需求，从提出到交付的完整过程。
-时间跨度约 1.5 小时，中间推翻了自己两次判断。</p>
-<hr />
-<h2 id="需求的-15-次演进"><a href="#需求的-15-次演进" class="headerlink" title="需求的 15 次演进"></a>需求的 15 次演进</h2>
-<table>
-<thead>
-<tr>
-<th>#</th>
-<th>需求</th>
-<th>我的处理</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>1</td>
-<td>企微收到消息 → 识别是否需要处理 → 固定在桌面</td>
-<td>立项。UI 自动化 + AI 判断 + tkinter 小组件</td>
-</tr>
-<tr>
-<td>2</td>
-<td><strong>软件和数据存 D 盘，不占 C 盘</strong></td>
-<td>项目迁到 <code>D:\WeComDesktopAlert</code>，Python 装到 <code>D:\Python312</code></td>
-</tr>
-<tr>
-<td>3</td>
-<td>群消息只收 @我 的</td>
-<td>加 <code>mentions_me()</code>；后来发现 @所有人 也算，修正</td>
-</tr>
-<tr>
-<td>4</td>
-<td>小组件要有一键勾掉</td>
-<td>卡片头 ☐ 勾掉整个会话 + 行首 ☐ 勾掉单条</td>
-</tr>
-<tr>
-<td>5</td>
-<td>打开企业微信时自动运行</td>
-<td>加 <code>watchdog.py</code> 监听 <code>WXWork.exe</code> 进程</td>
-</tr>
-<tr>
-<td>6</td>
-<td>同一人的多条消息合并到一张卡，按时间排序</td>
-<td>重写 <code>widget.py</code>，从"一条一框"改成"一会话一卡"</td>
-</tr>
-<tr>
-<td>7</td>
-<td>勾掉时清企微角标；但企微里先已读不能移除桌面内容</td>
-<td>加 <code>markread.py</code>（快捷键路线）；明确不做"因企微已读而删除"</td>
-</tr>
-<tr>
-<td>8</td>
-<td><strong>"我已经用了企微连接器，你为何不用它读消息？"</strong></td>
-<td>全量实测连接器 → 853006，证明读不了</td>
-</tr>
-<tr>
-<td>9</td>
-<td>不在消息界面 / 最小化时怎么读</td>
-<td>改用 <code>PrintWindow</code>；随后实测发现最小化仍冻结，推翻自己的结论</td>
-</tr>
-<tr>
-<td>10</td>
-<td>是不是必须开着企微且在消息页才能读到</td>
-<td>做受控实验，给出硬边界表格</td>
-</tr>
-<tr>
-<td>11</td>
-<td><strong>"这完全偏离了我的初衷，我要任何时候只要登录就必须查到"</strong></td>
-<td>承认做不到，指出唯一出路是「会话内容存档」，预留 <code>apiread.py</code></td>
-</tr>
-<tr>
-<td>12</td>
-<td>连接器能读到企微消息吗</td>
-<td>用 4 个 chat-id 证明是企业层开关（853006）</td>
-</tr>
-<tr>
-<td>13</td>
-<td>微信消息你能读到吗</td>
-<td>实测：Qt + 自绘 + SQLCipher，读不到</td>
-</tr>
-<tr>
-<td>14</td>
-<td>需要我的微信做什么授权吗</td>
-<td>不需要 —— 个人微信官方没有这个 API，授权无处可授</td>
-</tr>
-<tr>
-<td>15</td>
-<td>把全过程和踩坑发到 GitHub</td>
-<td>本文档</td>
-</tr>
-</tbody>
-</table>
-<blockquote>
-<p>两次自我推翻：
-- <strong>第一次</strong>：以为 <code>PrintWindow</code> 能突破最小化 → 实测证明最小化依然冻结。
-- <strong>第二次</strong>：以为企微必然停在"工作台"页 → 实际它在消息页，
-  是我第一版 <code>is_chat_view()</code> 的判断条件写得太严，导致本该能读的也跳过了。</p>
-</blockquote>
-<hr />
-<h2 id="三个阶段"><a href="#三个阶段" class="headerlink" title="三个阶段"></a>三个阶段</h2>
-<h3 id="阶段一：按直觉做（02:05-–-02:30）"><a href="#阶段一：按直觉做（02:05-–-02:30）" class="headerlink" title="阶段一：按直觉做（02:05 – 02:30）"></a>阶段一：按直觉做（02:05 – 02:30）</h3>
-<p>照着常规思路搭：UIA 读企微控件 → AI 判断 → tkinter 小组件。
-<code>tkinter</code> 装不上是第一个拦路虎，装了官方 Python 3.12 才通。</p>
-<p>产物：<code>main.py</code> / <code>widget.py</code> / <code>classifier.py</code> / <code>storage.py</code> / <code>watcher.py</code>。</p>
-<p><strong>这个阶段做完了，但它是错的</strong>——UIA 根本读不到企微内容。</p>
-<h3 id="阶段二：撞墙与换路（02:30-–-03:15）"><a href="#阶段二：撞墙与换路（02:30-–-03:15）" class="headerlink" title="阶段二：撞墙与换路（02:30 – 03:15）"></a>阶段二：撞墙与换路（02:30 – 03:15）</h3>
-<p>发现企微是 Flutter，UIA 只能读到 2 个空节点。于是依次尝试：</p>
-<ol>
-<li><strong>企微连接器</strong> → 853006（企业未开通会话存档）</li>
-<li><strong>Windows 通知</strong> → 探针跑 240 秒，一条没抓到</li>
-<li><strong>屏幕截图 + OCR</strong> → <strong>走通了</strong></li>
-</ol>
-<p>同时补上用户陆续提的需求（卡片合并、勾掉、消角标、自动启停）。</p>
-<h3 id="阶段三：实证与收敛（03:15-–-03:35）"><a href="#阶段三：实证与收敛（03:15-–-03:35）" class="headerlink" title="阶段三：实证与收敛（03:15 – 03:35）"></a>阶段三：实证与收敛（03:15 – 03:35）</h3>
-<p>用户连续追问核心问题（"不在消息页怎么读"、"是不是必须开着"、
-"连接器能读吗"、"微信呢"）。每问一次就做一次实测，最终把能力边界
-画成了一张明确的表格，并把结论写进 README 和 PITFALLS。</p>
-<hr />
-<h2 id="最终架构"><a href="#最终架构" class="headerlink" title="最终架构"></a>最终架构</h2>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">                    ┌─ 屏幕捕获（主通道）screen.py ─ PrintWindow + Windows OCR ─┐</span><br><span class="line">企微窗口 ───────────┤                                                          │</span><br><span class="line">                    ├─ 剪贴板捕获      capture.py ─ 企微内右键复制            ─┤</span><br><span class="line">                    └─ 全局热键        capture.py ─ Ctrl+Alt+Space            ─┘</span><br><span class="line">                                                                              │</span><br><span class="line">                                    raw_q ▼                                   │</span><br><span class="line">                          Pipeline（main.py）                                 │</span><br><span class="line">                          ├─ 群消息？没 @我 → 丢弃                           │</span><br><span class="line">                          └─ AI / 关键词判断 → 需不需要处理                   │</span><br><span class="line">                                    ui_q ▼                                    │</span><br><span class="line">                          桌面置顶小组件（widget.py）                         │</span><br><span class="line">                          ├─ 一会话一卡，卡内按时间排序                       │</span><br><span class="line">                          ├─ 勾掉单条 / 勾掉整卡                              │</span><br><span class="line">                          └─ 勾掉 → markread.py → 企微里标为已读              │</span><br></pre></td></tr></table></figure>
-<p>辅助模块：</p>
-<ul>
-<li><code>watchdog.py</code>：监听 <code>WXWork.exe</code>，企微开 → 拉起程序；企微关 → 退出</li>
-<li>
-<p><code>apiread.py</code>：<strong>预留</strong>的会话存档读取模块，企业一开通就能用，
-  遇到 853006 自动静默停用</p>
-</li>
-<li>
-<p><code>selftest.py</code>：界面自检（卡片合并 / 勾掉 / 收起）</p>
-</li>
-</ul>
-<hr />
-<h2 id="最终结论"><a href="#最终结论" class="headerlink" title="最终结论"></a>最终结论</h2>
-<p><strong>能做到的</strong>（窗口可见时全自动）：</p>
-<ul>
-<li>自动捕获新消息 → AI 判断 → 钉到桌面 → 一键勾掉 → 顺带清企微角标</li>
-</ul>
-<p><strong>做不到的</strong>（客观限制，不是代码问题）：</p>
-<ul>
-<li>企微最小化 / 移出屏幕时读不到（Flutter 停止渲染）</li>
-<li>企微停在工作台页时读不到</li>
-<li>用官方接口读聊天记录（企业未开通会话存档 853006）</li>
-<li>读个人微信消息（官方无此 API，本地库 SQLCipher 加密）</li>
-</ul>
-<p><strong>唯一的根治方案</strong>：企业管理员开通「会话内容存档」（付费），
-开通后 <code>apiread.py</code> 直接可用，届时窗口状态完全无关。</p>
-    
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
-      
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
-    <link itemprop="mainEntityOfPage" href="https://qinguobin.github.io/2026/10/17/wecom-desktop-alert/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="qinguobin">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Hexo">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          
-            <a href="/2026/10/17/wecom-desktop-alert/" class="post-title-link" itemprop="url">企业微信消息识别 · 桌面置顶小组件</a>
-        </h2>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建于: 2026-10-17 10:30:00" itemprop="dateCreated datePublished" datetime="2026-10-17T10:30:00+08:00">2026-10-17</time>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-      <p>把企业微信里<strong>需要你处理</strong>的消息钉在桌面最上层，处理完一键勾掉（顺带清掉企微里的未读角标）。</p>
-<p><img alt="三条读取路径的实测结论" src="docs/01-企微读取通道实测.md" /></p>
-<blockquote>
-<p><strong>先看这三篇，能省你半天时间：</strong>
-- <a href="JOURNEY.md">📖 全过程记录</a> —— 需求怎么演进的，我推翻过自己哪两次判断
-- <a href="PITFALLS.md">🔥 踩坑全记录</a> —— 34 个坑，每个都有「症状 → 根因 → 解法」
-- <a href="docs/01-企微读取通道实测.md">🔬 企微读取通道实测</a> —— 四条路，三条是死的
-</p>
-<p>一句话结论：<strong>企微和微信的聊天记录，官方都不让你读。</strong>
-本项目用「屏幕截图 + OCR」绕了过去，代价是——<strong>企微窗口必须真实显示在屏幕上</strong>。</p>
-</blockquote>
-<hr />
-<h2 id="一、它现在能做什么"><a href="#一、它现在能做什么" class="headerlink" title="一、它现在能做什么"></a>一、它现在能做什么</h2>
-<table>
-<thead>
-<tr>
-<th>功能</th>
-<th>状态</th>
-<th>说明</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>随企业微信自动启停</td>
-<td>✅</td>
-<td>打开企微自动弹出小组件，关掉企微自动退出（待办已保存）</td>
-</tr>
-<tr>
-<td>一会话一张卡片</td>
-<td>✅</td>
-<td>同一个联系人/群的多条消息合并成一张卡，按时间从上到下排列</td>
-</tr>
-<tr>
-<td>一键勾掉</td>
-<td>✅</td>
-<td>行首 ☐ 勾掉单条；卡片头 ☐ 勾掉整个会话</td>
-</tr>
-<tr>
-<td>勾掉即消角标</td>
-<td>✅</td>
-<td>自动在企业微信里把该会话标为已读，未读红点消失</td>
-</tr>
-<tr>
-<td>企微里先已读不影响</td>
-<td>✅</td>
-<td>在企微里先读了消息，桌面上的固定内容<strong>不会被移除</strong></td>
-</tr>
-<tr>
-<td>群消息只收 @我 的</td>
-<td>✅</td>
-<td>群里没 @你 的一律丢弃，<strong>@所有人 也不算</strong></td>
-</tr>
-<tr>
-<td>AI 判断是否需要处理</td>
-<td>✅</td>
-<td>共用 OpenAI 兼容接口；没配 key 时自动降级为关键词规则</td>
-</tr>
-<tr>
-<td>桌面置顶 + 跳转</td>
-<td>✅</td>
-<td>可拖动、可收起、可滚动，点卡片直接切到企业微信</td>
-</tr>
-</tbody>
-</table>
-<hr />
-<h2 id="二、消息的四种进法（重要，请先读）"><a href="#二、消息的四种进法（重要，请先读）" class="headerlink" title="二、消息的四种进法（重要，请先读）"></a>二、消息的四种进法（重要，请先读）</h2>
-<h3 id="1.-屏幕捕获（主通道，全自动）"><a href="#1.-屏幕捕获（主通道，全自动）" class="headerlink" title="1. 屏幕捕获（主通道，全自动）"></a>1. 屏幕捕获（主通道，全自动）</h3>
-<p>每 3 秒截图企微窗口 → 系统 OCR → 发现会话列表有新内容 → AI 判断 → 钉到桌面。
-<strong>不需要你做任何操作。</strong></p>
-<p>但有硬边界（全部实测过）：</p>
-<table>
-<thead>
-<tr>
-<th>企微窗口状态</th>
-<th>能不能读</th>
-<th>说明</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>显示在屏幕 + 停在「消息」页</td>
-<td>✅</td>
-<td>哪怕被别的窗口盖住、或在另一个虚拟桌面，<strong>都不影响</strong></td>
-</tr>
-<tr>
-<td>被其它窗口完全盖住</td>
-<td>✅</td>
-<td><code>PrintWindow</code> 强制重渲染，不受遮挡影响</td>
-</tr>
-<tr>
-<td>在另一个虚拟桌面</td>
-<td>✅</td>
-<td>同上</td>
-</tr>
-<tr>
-<td>切到「工作台/文档」等页</td>
-<td>❌</td>
-<td>屏幕上没渲染消息列表，没像素就没内容</td>
-</tr>
-<tr>
-<td><strong>最小化到任务栏</strong></td>
-<td>❌</td>
-<td>企微停止渲染，只能拿到冻结帧（实测 70 秒纹丝不动）</td>
-</tr>
-<tr>
-<td><strong>移到屏幕外</strong>（未最小化）</td>
-<td>❌</td>
-<td>同样冻结（移回屏幕内立刻恢复）</td>
-</tr>
-</tbody>
-</table>
-<blockquote>
-<p>所以用法是：<strong>企微开着、停在消息页、别最小化</strong>。
-想让它"眼不见为净"，<strong>用别的窗口盖住它</strong>，或者<strong>扔到另一个虚拟桌面</strong>——这两种都照读不误。</p>
-</blockquote>
-<p>当前状态会实时显示在标题栏上：<code>企微已最小化（暂停）</code> / <code>企微不在消息页</code>。</p>
-<h3 id="2.-剪贴板（辅助，最精确）"><a href="#2.-剪贴板（辅助，最精确）" class="headerlink" title="2. 剪贴板（辅助，最精确）"></a>2. 剪贴板（辅助，最精确）</h3>
-<p>在企微里<strong>右键消息 → 复制</strong>即可。</p>
-<h3 id="3.-全局热键（辅助，推荐）"><a href="#3.-全局热键（辅助，推荐）" class="headerlink" title="3. 全局热键（辅助，推荐）"></a>3. 全局热键（辅助，推荐）</h3>
-<p>在企微里<strong>选中那段消息文字 → 按 <code>Ctrl+Alt+Space</code></strong>，程序替你在企微内执行复制。
-只在焦点属于企微窗口时生效，不会把 Ctrl+C 打到别的程序里。</p>
-<h3 id="4.-会话存档-API（预留，唯一根治方案）"><a href="#4.-会话存档-API（预留，唯一根治方案）" class="headerlink" title="4. 会话存档 API（预留，唯一根治方案）"></a>4. 会话存档 API（预留，唯一根治方案）</h3>
-<p>见 <a href="#六想让它真正的只要登录就一定读到">第六节</a>。</p>
-<hr />
-<h2 id="三、安装与启动"><a href="#三、安装与启动" class="headerlink" title="三、安装与启动"></a>三、安装与启动</h2>
-<blockquote>
-<p>当前环境已就绪（Python 3.12 在 <code>D:\Python312</code>，依赖已装），直接用即可。
-新机器上先跑 <code>Install.bat</code>。</p>
-</blockquote>
-<ol>
-<li>编辑 <code>config.json</code>，填你的企微昵称（群内 @ 识别靠它）：</li>
-</ol>
-<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&quot;filter&quot;: { &quot;my_names&quot;: [&quot;张三&quot;] }</span><br></pre></td></tr></table></figure>
-<ol start="2">
-<li>双击 <code>Start.bat</code> 启动（右上角出现小组件）</li>
-<li>双击 <code>Enable-AutoStart.bat</code> —— 之后开机静默常驻，打开企业微信即自动弹出</li>
-</ol>
-<blockquote>
-<p>⚠️ 程序<strong>必须由你双击启动</strong>，或等下次开机自动起来。
-从自动化/终端环境里拉起的进程会被系统回收，存活不下来（实测 <code>Start-Process</code>、
-<code>wscript</code>、<code>schtasks</code> 全被拦截）。</p>
-</blockquote>
-<p>其他入口：</p>
-<ul>
-<li><code>Start-Demo.bat</code>：不依赖企业微信，循环注入示例消息看效果</li>
-<li><code>Start-Console.bat</code>：带控制台的排错版</li>
-<li><code>Start-Watchdog.bat</code>：单独跑看门狗（控制台可见）</li>
-<li><code>Disable-AutoStart.bat</code>：取消自启</li>
-</ul>
-<hr />
-<h2 id="四、接入-AI（可选）"><a href="#四、接入-AI（可选）" class="headerlink" title="四、接入 AI（可选）"></a>四、接入 AI（可选）</h2>
-<p>不配也能用，自动降级为<strong>关键词规则</strong>。
-想要更准，填任意 OpenAI 兼容服务（DeepSeek / 通义 / Kimi / 智谱 / 本地 Ollama 都行）：</p>
-<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&quot;ai&quot;: {</span><br><span class="line">  &quot;api_base&quot;: &quot;https://api.deepseek.com/v1&quot;,</span><br><span class="line">  &quot;api_key&quot;: &quot;sk-xxxxxxxx&quot;,</span><br><span class="line">  &quot;model&quot;: &quot;deepseek-chat&quot;,</span><br><span class="line">  &quot;timeout&quot;: 20</span><br><span class="line">}</span><br></pre></td></tr></table></figure>
-<p>AI 输出：是否需要处理 + 优先级（高/中/低）+ 一句话理由，理由会显示在卡片上。</p>
-<hr />
-<h2 id="五、勾掉时如何消掉企微角标"><a href="#五、勾掉时如何消掉企微角标" class="headerlink" title="五、勾掉时如何消掉企微角标"></a>五、勾掉时如何消掉企微角标</h2>
-<p>企微没有开放"标记已读"的接口，程序用两级策略（都失败也只是记日志，不影响使用）：</p>
-<ol>
-<li>UIA：找会话 → 右键 → "标记为已读"（<strong>Flutter 下基本用不上</strong>）</li>
-<li><strong>快捷键（主路线）</strong>：激活企微 → <code>Ctrl+F</code> 唤起搜索 → 粘贴会话名 → 回车打开会话
-   → 角标清除 → <code>Esc</code> → 切回你原来的窗口</li>
-</ol>
-<p><code>Ctrl+F</code> 这条实测通过，可用 <code>tools/test_hotkey.py</code> 复验。
-如果某台机器上不灵：</p>
-<ul>
-<li><code>tools/test_hotkey.py k</code> 试试 <code>Ctrl+K</code>，好用就把 <code>mark_read.search_key</code> 改成 <code>"k"</code></li>
-<li>或直接鼠标点击搜索框：设 <code>mark_read.click_search_offset = [160, 24]</code></li>
-</ul>
-<hr />
-<h2 id="六、想让它真正的「只要登录就一定读到」"><a href="#六、想让它真正的「只要登录就一定读到」" class="headerlink" title="六、想让它真正的「只要登录就一定读到」"></a>六、想让它真正的「只要登录就一定读到」</h2>
-<p><strong>唯一的路：企业微信官方的「会话内容存档」。</strong></p>
-<p>这是官方的服务端能力，直接拿聊天记录，<strong>跟客户端窗口状态完全无关</strong>——
-企微最小化、锁屏、甚至没开电脑都能读到。</p>
-<p>它是付费功能，需要你们<strong>企业管理员</strong>在企微管理后台开通。</p>
-<p>在此之前本项目用的是屏幕 OCR，必须先说清它为什么被卡住：</p>
-<table>
-<thead>
-<tr>
-<th>路径</th>
+<th>通道</th>
 <th>结论</th>
 <th>证据</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>客户端 UI 自动化</td>
-<td>❌</td>
-<td>企微是 Flutter，UIA 只能读到 2 个空节点</td>
+<td>客户端 UI 自动化（UIA）</td>
+<td>❌ 死路</td>
+<td>企微是 Flutter 渲染，主窗口 <code>WeWorkWindow</code> 下只有一个 <code>FLUTTERVIEW</code>，UIA 只能读到 2 个空节点</td>
 </tr>
 <tr>
 <td>官方连接器 <code>wecom-cli</code></td>
-<td>❌</td>
-<td><code>errcode 853006</code>「企业未开通」</td>
+<td>❌ 死路</td>
+<td><code>chat messages list</code> 一律返回 <code>errcode 853006</code>「企业未开通会话存档」</td>
 </tr>
 <tr>
 <td>Windows 系统通知</td>
-<td>❌</td>
-<td>探针 240 秒，一条都没弹（本机企微不弹通知）</td>
+<td>❌ 死路</td>
+<td>通知探针跑了 240 秒，企微一条通知都没弹</td>
 </tr>
 <tr>
 <td><strong>屏幕截图 + OCR</strong></td>
-<td>⚠️</td>
-<td>可用，但窗口必须可见</td>
+<td>⚠️ 唯一走通</td>
+<td>见第四步</td>
 </tr>
 </tbody>
 </table>
-<p><strong>853006 的判断过程</strong>（省了我半天）：用 4 个 chat-id 试，其中 3 个是瞎编的
-（<code>wmXXXX</code> / <code>test</code>），<strong>全部返回同一个错误码</strong> —— 说明拦截发生在校验 ID 之前，
-是<strong>企业层级的功能开关</strong>，不是参数问题、也不是授权问题。</p>
-<p><code>apiread.py</code> 已经写好了：企业一开通就能用，且在遇到 853006 时会<strong>自动静默停用</strong>，
-不会刷屏报错。开通后只需：</p>
-<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">&quot;capture&quot;: {</span><br><span class="line">  &quot;api&quot;: true,</span><br><span class="line">  &quot;api_chat_ids&quot;: [&quot;同事A&quot;, &quot;项目群&quot;],</span><br><span class="line">  &quot;api_interval_seconds&quot;: 20</span><br><span class="line">}</span><br></pre></td></tr></table></figure>
+<p>两个关键推理，帮你少走弯路：</p>
+<ul>
+<li>
+<p><strong>853006 不是授权问题</strong>。我用 4 个 chat-id 试，其中 3 个是瞎编的（<code>wmXXXX</code> / <code>test</code>），
+  全部返回同一个错误码——说明拦截发生在校验 ID 之前，是<strong>企业层级的功能开关</strong>。
+  所以别再去点授权了，授权解决不了。</p>
+</li>
+<li>
+<p><strong>企微虽然不暴露控件树，但它最终要把像素画到窗口上</strong>——像素是绕不过去的。
+  这就是 OCR 路线能成立的根因。</p>
+</li>
+</ul>
+<blockquote>
+<p>顺带回答一个高频问题：<strong>个人微信更读不到</strong>。微信官方压根没有
+"读取个人聊天记录"的 API（只开放公众号 / 小程序 / 企业微信三类），
+本地 12 个数据库又全部是 SQLCipher 加密。不是权限问题，是这个能力不存在。</p>
+</blockquote>
 <hr />
-<h2 id="七、个人微信呢"><a href="#七、个人微信呢" class="headerlink" title="七、个人微信呢"></a>七、个人微信呢</h2>
-<p><strong>读不到。</strong> 而且比企业微信更封闭——
-<strong>微信官方就没有开放"读取个人聊天记录"的 API</strong>（只开放了公众号 / 小程序 / 企业微信三类）。</p>
-<p>所以用户问"需要我的微信做什么授权吗"，答案是：<strong>不需要，也无处可授权</strong>——
-不是权限问题，是这个产品能力根本不存在。</p>
-<p>实测证据见 <a href="docs/02-个人微信读取实测.md">docs/02-个人微信读取实测.md</a>：
-Qt + 自绘（UIA 空）、本地 12 个库全部 SQLCipher 加密、最小化时截图是纯色空图。</p>
+<h2 id="第二步：准备环境"><a href="#第二步：准备环境" class="headerlink" title="第二步：准备环境"></a>第二步：准备环境</h2>
+<p>一句话：<strong>全装 D 盘，别碰 C 盘</strong>。</p>
+<ol>
+<li>装官方 Python 3.12 到 D 盘。静默安装时有个<strong>必须加的参数</strong>：</li>
+</ol>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">python-installer.exe /quiet InstallAllUsers=0 TargetDir=D:\Python312 `</span><br><span class="line">  AssociateFiles=0 Shortcuts=0 Include_launcher=0 PrependPath=0 Include_tcltk=1</span><br></pre></td></tr></table></figure>
+<p><code>Include_tcltk=1</code> 就是关键——<strong>默认静默安装不带 tkinter</strong>，
+而 tkinter 是 Windows 上做置顶小窗最省事的选择。我在这上面先撞了一次墙。</p>
+<ol start="2">
+<li>装两个依赖：</li>
+</ol>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pip install winsdk uiautomation</span><br></pre></td></tr></table></figure>
+<p><code>winsdk</code> 是调 Windows 自带中文 OCR 的（本机有 <code>zh-Hans-CN</code> 语言包，零额外依赖）；
+<code>uiautomation</code> 先备着，企微改版成可自动化界面后能直接用。</p>
+<ol start="3">
+<li>项目结构和数据也全放 D 盘：</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">D:\WeComDesktopAlert\</span><br><span class="line">├── main.py        # 入口：捕获 → 过滤 → 判断 → 显示</span><br><span class="line">├── screen.py      # 屏幕捕获 + OCR（主通道）</span><br><span class="line">├── widget.py      # 桌面置顶小组件</span><br><span class="line">├── capture.py     # 剪贴板 + Ctrl+Alt+Space 热键</span><br><span class="line">├── classifier.py  # AI 判断 + 关键词兜底</span><br><span class="line">├── markread.py    # 勾掉后在企微里标记已读</span><br><span class="line">├── watchdog.py    # 随企微启停的看门狗</span><br><span class="line">├── storage.py     # 待办持久化</span><br><span class="line">└── config.json    # 填你的企微昵称（群内 @ 识别靠它）</span><br></pre></td></tr></table></figure>
 <hr />
-<h2 id="八、文件说明"><a href="#八、文件说明" class="headerlink" title="八、文件说明"></a>八、文件说明</h2>
-<table>
-<thead>
-<tr>
-<th>文件</th>
-<th>作用</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>main.py</code></td>
-<td>入口：捕获 → 过滤 → AI 判断 → 显示</td>
-</tr>
-<tr>
-<td><code>screen.py</code></td>
-<td><strong>屏幕捕获 + OCR（主通道）</strong></td>
-</tr>
-<tr>
-<td><code>widget.py</code></td>
-<td>桌面置顶小组件（卡片式、可滚动、勾掉动画）</td>
-</tr>
-<tr>
-<td><code>capture.py</code></td>
-<td>剪贴板捕获 + <code>Ctrl+Alt+Space</code> 全局热键</td>
-</tr>
-<tr>
-<td><code>apiread.py</code></td>
-<td><strong>预留</strong>：会话存档 API 读取（会自检测 853006 并停用）</td>
-</tr>
-<tr>
-<td><code>classifier.py</code></td>
-<td>AI 判断 + 关键词兜底</td>
-</tr>
-<tr>
-<td><code>markread.py</code></td>
-<td>勾掉后在企微里标记已读</td>
-</tr>
-<tr>
-<td><code>storage.py</code></td>
-<td>待办持久化</td>
-</tr>
-<tr>
-<td><code>watchdog.py</code></td>
-<td>随企业微信启停的看门狗</td>
-</tr>
-<tr>
-<td><code>watcher.py</code></td>
-<td>企微窗口监听（企微换成可自动化界面后可启用，默认关）</td>
-</tr>
-<tr>
-<td><code>toasts.py</code></td>
-<td>Windows 通知捕获（本机企微不弹通知，默认未启用）</td>
-</tr>
-<tr>
-<td><code>paths.py</code></td>
-<td>统一路径（全部指向 D 盘）</td>
-</tr>
-<tr>
-<td><code>selftest.py</code></td>
-<td>界面自检（卡片合并 / 勾掉 / 收起）</td>
-</tr>
-</tbody>
-</table>
-<p>诊断脚本（<code>tools/</code>）：</p>
-<table>
-<thead>
-<tr>
-<th>脚本</th>
-<th>用途</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>probe_windows.py</code></td>
-<td>看企微窗口/控件结构（会告诉你是不是 Flutter）</td>
-</tr>
-<tr>
-<td><code>probe_wechat.py</code> / <code>probe_wechat_uia.py</code></td>
-<td>看微信窗口结构</td>
-</tr>
-<tr>
-<td><code>probe_toast.py</code> / <code>probe_toast2.py</code></td>
-<td>抓系统通知（验证企微弹不弹）</td>
-</tr>
-<tr>
-<td><code>test_hotkey.py</code></td>
-<td>验证 <code>Ctrl+F</code> 能否唤起企微搜索框</td>
-</tr>
-<tr>
-<td><code>test_markread.py</code></td>
-<td>单独验证"标为已读"</td>
-</tr>
-<tr>
-<td><code>test_list_parse.py</code></td>
-<td>打印程序眼中的企微会话列表</td>
-</tr>
-<tr>
-<td><code>test_offscreen.py</code></td>
-<td>验证把企微移出屏幕后是否还能读到</td>
-</tr>
-<tr>
-<td><code>test_screenocr.py</code> / <code>test_scale_ocr.py</code></td>
-<td>OCR 效果对比</td>
-</tr>
-</tbody>
-</table>
+<h2 id="第三步：认清整体架构"><a href="#第三步：认清整体架构" class="headerlink" title="第三步：认清整体架构"></a>第三步：认清整体架构</h2>
+<p>数据流向一张图看懂：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">                    ┌─ 屏幕捕获（主通道）screen.py ─ PrintWindow + OCR ─┐</span><br><span class="line">企微窗口 ───────────┤                                                   │</span><br><span class="line">                    ├─ 剪贴板捕获      capture.py ─ 企微内右键复制      ─┤</span><br><span class="line">                    └─ 全局热键        capture.py ─ Ctrl+Alt+Space     ─┘</span><br><span class="line">                                    ▼</span><br><span class="line">                    Pipeline（main.py）</span><br><span class="line">                    ├─ 群消息？没 @我 → 直接丢弃</span><br><span class="line">                    └─ AI / 关键词判断 → 要不要你处理</span><br><span class="line">                                    ▼</span><br><span class="line">                    桌面置顶小组件（widget.py）</span><br><span class="line">                    ├─ 一会话一卡，卡内按时间排序</span><br><span class="line">                    ├─ 勾掉单条 / 勾掉整卡</span><br><span class="line">                    └─ 勾掉 → markread.py → 企微里标为已读</span><br></pre></td></tr></table></figure>
 <hr />
-<h2 id="九、已知限制（说在前面）"><a href="#九、已知限制（说在前面）" class="headerlink" title="九、已知限制（说在前面）"></a>九、已知限制（说在前面）</h2>
+<h2 id="第四步：屏幕捕获——全项目最核心的一段"><a href="#第四步：屏幕捕获——全项目最核心的一段" class="headerlink" title="第四步：屏幕捕获——全项目最核心的一段"></a>第四步：屏幕捕获——全项目最核心的一段</h2>
+<p>原理：Flutter 不暴露控件树，但<strong>像素总要画到窗口上</strong>，所以截图 + OCR。
+三个必须踩对的点，每个都对应一个"毫无反应"级别的坑：</p>
+<h3 id="1.-用-PrintWindow，不要用-BitBlt"><a href="#1.-用-PrintWindow，不要用-BitBlt" class="headerlink" title="1. 用 PrintWindow，不要用 BitBlt"></a>1. 用 <code>PrintWindow</code>，不要用 <code>BitBlt</code></h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">PW_RENDERFULLCONTENT = 2</span><br><span class="line">ok = user32.PrintWindow(hwnd, mem, PW_RENDERFULLCONTENT)</span><br><span class="line">if not ok:</span><br><span class="line">    gdi32.BitBlt(mem, 0, 0, w, h, hdc, 0, 0, SRCCOPY)   # 回退</span><br></pre></td></tr></table></figure>
+<p>企微走 DirectComposition 合成，<code>BitBlt</code> 只能拿到<strong>过期的那一帧</strong>——
+这就是"用户明明发了消息，程序却毫无反应"的真凶。</p>
+<h3 id="2.-OCR-之前先放大-2-倍"><a href="#2.-OCR-之前先放大-2-倍" class="headerlink" title="2. OCR 之前先放大 2 倍"></a>2. OCR 之前先放大 2 倍</h3>
+<p>Windows OCR 对 12px 小字识别率很差。用 GDI <code>HALFTONE</code> 模式高质量放大 2 倍后
+才可用（人名偶有误差，消息正文基本准确）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">gdi32.SetStretchBltMode(mem2, HALFTONE)</span><br><span class="line">gdi32.SetBrushOrgEx(mem2, 0, 0, 0)</span><br><span class="line">gdi32.StretchBlt(mem2, 0, 0, W, H, mem, 0, 0, w, h, SRCCOPY)</span><br></pre></td></tr></table></figure>
+<h3 id="3.-强制把-alpha-通道填成不透明"><a href="#3.-强制把-alpha-通道填成不透明" class="headerlink" title="3. 强制把 alpha 通道填成不透明"></a>3. 强制把 alpha 通道填成不透明</h3>
+<p>窗口截图的 alpha 是 0，OCR 引擎会当成<strong>全透明图</strong>，直接返回 0 行：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ba = bytearray(buf)</span><br><span class="line">ba[3::4] = b&quot;\xff&quot; * (sw * sh)</span><br></pre></td></tr></table></figure>
+<h3 id="找到&quot;会话列表&quot;那一列"><a href="#找到&quot;会话列表&quot;那一列" class="headerlink" title="找到&quot;会话列表&quot;那一列"></a>找到"会话列表"那一列</h3>
+<p>从整窗 OCR 结果里按 <strong>x 坐标区间</strong>切出列表列（默认 <code>x ∈ [0.15, 0.38]</code>），
+再按 y 排序。还要确认企微停在**「消息」页**——靠列表右侧的
+时间戳特征（<code>刚刚</code> / <code>N分钟前</code> / <code>昨天</code> / <code>HH:MM</code>）判断，
+切到工作台/文档页自动跳过（否则会把"审批""打卡"当成消息）。</p>
+<h3 id="OCR-错字怎么办"><a href="#OCR-错字怎么办" class="headerlink" title="OCR 错字怎么办"></a>OCR 错字怎么办</h3>
+<p><code>@秦国彬</code> 会被识别成 <code>@泰国彬</code> / <code>@孬王彬</code>，精确匹配全漏。
+用 <code>difflib</code> 做相似度模糊匹配；代价是群名也可能误匹配，
+所以保留一个 <code>group_senders</code> 白名单兜底。</p>
+<hr />
+<h2 id="第五步：判断&quot;这条消息要不要你处理&quot;"><a href="#第五步：判断&quot;这条消息要不要你处理&quot;" class="headerlink" title="第五步：判断&quot;这条消息要不要你处理&quot;"></a>第五步：判断"这条消息要不要你处理"</h2>
+<p>三条规则，都是被真实消息教育出来的：</p>
 <ol>
 <li>
-<p><strong>企微最小化 / 移出屏幕 / 不在消息页时读不到</strong> —— 这是操作系统 + Flutter 的
-   硬性行为，绕不过去。想看不见它，用别的窗口盖住或扔到另一个虚拟桌面。</p>
+<p><strong>群消息只收 @你本人的</strong>。<code>@所有人</code> / <code>@全体成员</code> <strong>一律不算</strong>——
+   群里 @所有人 大多是公告，钉上去只会干扰你。</p>
 </li>
 <li>
-<p><strong>无法用官方接口读聊天记录</strong>（企业未开通会话存档 853006）。</p>
-</li>
-<li><strong>个人微信读不到</strong>（官方无此 API）。</li>
-<li>
-<p>勾掉后"消角标"依赖企微搜索框，企微改版可能需要调整
-   <code>mark_read.search_key</code> / <code>click_search_offset</code>。</p>
+<p><strong>先扫否定词</strong>。"公司年会照片已上传，<strong>无需回复</strong>"这种，
+   命中"回复"俩字会被误判成待办；所以先扫 <code>无需 / 不用 / 不必 / 已通过</code>，
+   命中直接判为无需处理。</p>
 </li>
 <li>
-<p>OCR 识别会有错别字，程序已做模糊匹配；若要更准，可在
-   <code>filter.group_senders</code> 里补全群名。</p>
+<p><strong>AI 判断 + 关键词兜底</strong>。共用任意 OpenAI 兼容接口
+   （DeepSeek / 通义 / Kimi / Ollama 都行），输出"要不要处理 + 优先级 + 一句话理由"，
+   理由直接显示在卡片上。不配 key 也能跑，自动降级为关键词规则。</p>
 </li>
-<li>
-<p>程序必须由你双击启动，自动化环境拉起的进程活不下来。</p>
-</li>
-<li>程序只在本机运行，除你配置的 AI 接口外不发送任何数据。</li>
 </ol>
 <hr />
-<h2 id="环境"><a href="#环境" class="headerlink" title="环境"></a>环境</h2>
+<h2 id="第六步：做一块常驻桌面的小组件"><a href="#第六步：做一块常驻桌面的小组件" class="headerlink" title="第六步：做一块常驻桌面的小组件"></a>第六步：做一块常驻桌面的小组件</h2>
+<p>用 tkinter，无边框 + 置顶 + 可拖动 + 可滚动。交互上是用户骂出来的：</p>
 <ul>
-<li>Python 3.12（<code>D:\Python312</code>，必须带 tk，静默安装参数 <code>Include_tcltk=1</code>）</li>
-<li>依赖：<code>winsdk</code>（Windows OCR）、<code>uiautomation</code>（企微改版后可直接用）</li>
-<li>程序 / Python / 数据<strong>全部在 D 盘</strong>，不占 C 盘</li>
-</ul>
-    
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
-      
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
-    <link itemprop="mainEntityOfPage" href="https://qinguobin.github.io/2026/10/17/screen-ocr/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="qinguobin">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Hexo">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          
-            <a href="/2026/10/17/screen-ocr/" class="post-title-link" itemprop="url">实测记录 03 · 屏幕捕获 + OCR 方案</a>
-        </h2>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建于: 2026-10-17 10:20:00" itemprop="dateCreated datePublished" datetime="2026-10-17T10:20:00+08:00">2026-10-17</time>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-      <p>这是本项目<strong>唯一走通</strong>的自动读取方案。核心在 <code>screen.py</code>。</p>
-<hr />
-<h2 id="为什么它能绕开-Flutter-/-Qt"><a href="#为什么它能绕开-Flutter-/-Qt" class="headerlink" title="为什么它能绕开 Flutter / Qt"></a>为什么它能绕开 Flutter / Qt</h2>
-<p>Flutter（企微）和 Qt 自绘（微信）都不向 UIA 暴露控件树，
-但<strong>它们最终都要把像素画到窗口上</strong>。像素是绕不过去的。</p>
-<p>所以流程是：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">PrintWindow(hwnd, PW_RENDERFULLCONTENT)   ← 强制重渲染，拿到真实画面</span><br><span class="line">        ↓</span><br><span class="line">StretchBlt(HALFTONE) 放大 2 倍            ← 解决 12px 小字识别率差</span><br><span class="line">        ↓</span><br><span class="line">Windows.Media.Ocr (zh-Hans-CN)            ← 系统自带中文 OCR，零额外依赖</span><br><span class="line">        ↓</span><br><span class="line">按 x 坐标筛选会话列表列 → 按 y 排序 → 与上次快照 diff</span><br><span class="line">        ↓</span><br><span class="line">新增/变化的行 = 新消息</span><br></pre></td></tr></table></figure>
-<hr />
-<h2 id="三个必须踩对的点"><a href="#三个必须踩对的点" class="headerlink" title="三个必须踩对的点"></a>三个必须踩对的点</h2>
-<h3 id="1.-PrintWindow(PW_RENDERFULLCONTENT)-而不是-BitBlt"><a href="#1.-PrintWindow(PW_RENDERFULLCONTENT)-而不是-BitBlt" class="headerlink" title="1. PrintWindow(PW_RENDERFULLCONTENT) 而不是 BitBlt"></a>1. <code>PrintWindow(PW_RENDERFULLCONTENT)</code> 而不是 <code>BitBlt</code></h3>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">PW_RENDERFULLCONTENT = 2</span><br><span class="line">ok = user32.PrintWindow(hwnd, mem, PW_RENDERFULLCONTENT)</span><br><span class="line">if not ok:</span><br><span class="line">    gdi32.BitBlt(mem, 0, 0, w, h, hdc, 0, 0, SRCCOPY)</span><br></pre></td></tr></table></figure>
-<p><code>BitBlt</code> 对 DirectComposition 合成的窗口只能拿到过期帧——
-这是"用户发了消息、程序毫无反应"的直接原因。</p>
-<h3 id="2.-最小化/屏外时要用还原矩形"><a href="#2.-最小化/屏外时要用还原矩形" class="headerlink" title="2. 最小化/屏外时要用还原矩形"></a>2. 最小化/屏外时要用还原矩形</h3>
-<p>最小化后 <code>GetWindowRect</code> 会返回垃圾坐标：</p>
-<table>
-<thead>
-<tr>
-<th>场景</th>
-<th>GetWindowRect 返回值</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>企微最小化</td>
-<td><code>(-32000, -32000)</code></td>
-</tr>
-<tr>
-<td>微信最小化</td>
-<td><code>314x50</code>（小矩形，不是 -32000）</td>
-</tr>
-</tbody>
-</table>
-<p>所以<strong>不能只判断 -32000</strong>，必须用 <code>IsIconic</code>：</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">if r.left &lt;= -20000 or r.top &lt;= -20000 or user32.IsIconic(hwnd):</span><br><span class="line">    plc = WINDOWPLACEMENT()</span><br><span class="line">    plc.length = ctypes.sizeof(plc)</span><br><span class="line">    if user32.GetWindowPlacement(hwnd, ctypes.byref(plc)):</span><br><span class="line">        r = plc.rcNormalPosition</span><br></pre></td></tr></table></figure>
-<h3 id="3.-强制填充-alpha-通道"><a href="#3.-强制填充-alpha-通道" class="headerlink" title="3. 强制填充 alpha 通道"></a>3. 强制填充 alpha 通道</h3>
-<p>窗口截图的 alpha 是 0，OCR 引擎会当成全透明图，直接返回 0 行：</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ba = bytearray(buf)</span><br><span class="line">ba[3::4] = b&quot;\xff&quot; * (sw * sh)</span><br></pre></td></tr></table></figure>
-<hr />
-<h2 id="会话列表的定位"><a href="#会话列表的定位" class="headerlink" title="会话列表的定位"></a>会话列表的定位</h2>
-<p>按 <strong>x 坐标区间</strong> 从整窗 OCR 结果里切出会话列表那一列（默认 <code>x ∈ [0.15, 0.38]</code>），
-再按 y 排序。构造 <code>screen.py</code>：</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">&quot;list_x&quot;: [0.15, 0.38]      # 会话列表列的 x 范围（占窗口宽度比例）</span><br><span class="line">&quot;screen_scale&quot;: 2           # 放大倍数</span><br><span class="line">&quot;screen_interval_seconds&quot;: 3</span><br></pre></td></tr></table></figure>
-<h2 id="消息页判断-is_chat_view()"><a href="#消息页判断-is_chat_view()" class="headerlink" title="消息页判断 is_chat_view()"></a>消息页判断 <code>is_chat_view()</code></h2>
-<p>必须确认企微停在「消息」页，否则会把工作台页的"审批""打卡"当成消息。</p>
-<p><strong>第一版（错）</strong>：找顶部的"未读/@我/单聊/群聊"筛选条 → 太严，
-实际布局里位置对不上，导致本该能读的也被跳过。</p>
-<p><strong>第二版（对）</strong>：找<strong>会话列表右侧的时间戳</strong>特征——
-<code>刚刚</code> / <code>N分钟前</code> / <code>昨天</code> / <code>HH:MM</code> / <code>昨天 HH:MM</code>。</p>
-<hr />
-<h2 id="OCR-错字的模糊匹配"><a href="#OCR-错字的模糊匹配" class="headerlink" title="OCR 错字的模糊匹配"></a>OCR 错字的模糊匹配</h2>
-<p>OCR 会把 <code>@秦国彬</code> 识别成 <code>@泰国彬</code> / <code>@孬王彬</code> / <code>@癸国彬</code>，精确匹配全漏。
-用 <code>difflib</code> 做相似度匹配（阈值内算命中）。</p>
-<p>副作用是群名也可能被误匹配，所以保留 <code>filter.group_senders</code> 白名单兜底。</p>
-<hr />
-<h2 id="性能"><a href="#性能" class="headerlink" title="性能"></a>性能</h2>
-<table>
-<thead>
-<tr>
-<th>项</th>
-<th>值</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>单次截图 + 2x 放大</td>
-<td>~200ms</td>
-</tr>
-<tr>
-<td>单次 OCR</td>
-<td>~500ms</td>
-</tr>
-<tr>
-<td>一轮全窗口识别</td>
-<td>~0.7s</td>
-</tr>
-<tr>
-<td>轮询间隔</td>
-<td>3s</td>
-</tr>
-</tbody>
-</table>
-<p>CPU 占用可以接受，但建议不要调到 1s 以下。</p>
-    
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
-      
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
-    <link itemprop="mainEntityOfPage" href="https://qinguobin.github.io/2026/10/17/wechat-read-test/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="qinguobin">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Hexo">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          
-            <a href="/2026/10/17/wechat-read-test/" class="post-title-link" itemprop="url">实测记录 02 · 个人微信（WeChat）能不能读</a>
-        </h2>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建于: 2026-10-17 10:10:00" itemprop="dateCreated datePublished" datetime="2026-10-17T10:10:00+08:00">2026-10-17</time>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-      <p>结论：<strong>读不到，而且比企业微信更封闭——因为个人微信官方就没有开放读取聊天记录的 API。</strong></p>
-<hr />
-<h2 id="一、没有可授权的东西"><a href="#一、没有可授权的东西" class="headerlink" title="一、没有可授权的东西"></a>一、没有可授权的东西</h2>
-<p>微信官方只开放了三类 API：<strong>公众号、小程序、企业微信</strong>。
-<strong>个人账号的聊天记录不在其中</strong>——所以流程上不存在"授权某个应用去读我的微信消息"
-这个动作，翻遍微信设置也找不到这个开关。</p>
-<blockquote>
-<p>用户问："需要我的微信做什么授权吗？"
-答：不需要，也无处可授权。这不是权限问题，是这个产品能力根本不存在。</p>
-</blockquote>
-<p>WorkBuddy 连接器市场全量搜索的结果里，也确实<strong>没有微信连接器</strong>
-（只有 QQ邮箱 / ima / 钉钉 / 福帮手 / Notion / 腾讯企点客服 / CloudBase /
-微盛企微管家SCRM / 秒哒，后两者是企微生态，不是个人微信）。</p>
-<hr />
-<h2 id="二、本机微信-4.0-的四项实测"><a href="#二、本机微信-4.0-的四项实测" class="headerlink" title="二、本机微信 4.0 的四项实测"></a>二、本机微信 4.0 的四项实测</h2>
-<h3 id="1.-主窗口是-Qt-+-自绘，UIA-控件树完全为空"><a href="#1.-主窗口是-Qt-+-自绘，UIA-控件树完全为空" class="headerlink" title="1. 主窗口是 Qt + 自绘，UIA 控件树完全为空"></a>1. 主窗口是 Qt + 自绘，UIA 控件树完全为空</h3>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">主窗口 class = Qt51514QWindowIcon      （微信 4.0 改用 Qt 框架）</span><br><span class="line">  └─ 唯一子窗口 class = MMUIRenderSubWindow   （自绘渲染层）</span><br><span class="line">      └─ UIA 遍历结果：0 个节点</span><br></pre></td></tr></table></figure>
-<p>和企业微信（Flutter）一样，走 UIA 路线是死路。
-复现脚本：<code>tools/probe_wechat_uia.py</code></p>
-<h3 id="2.-本地数据库全部-SQLCipher-加密"><a href="#2.-本地数据库全部-SQLCipher-加密" class="headerlink" title="2. 本地数据库全部 SQLCipher 加密"></a>2. 本地数据库全部 SQLCipher 加密</h3>
-<p><code>Documents\WeChat Files\&lt;wxid&gt;\Msg\</code> 下的 12 个库，文件头全部不是 <code>SQLite format 3</code>：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">Applet.db        79416a3feef56cca507274dc0cb5b645  → 已加密</span><br><span class="line">BizChat.db       36a958c265b96920d509c00d91a9160a  → 已加密</span><br><span class="line">BizChatMsg.db    f1b131de8a6f9f539cf019f0e5e803ab  → 已加密</span><br><span class="line">ChatMsg.db       3adcee4cece66d3f26f65abcf395a661  → 已加密</span><br><span class="line">ChatRoomUser.db  2b4dc2fe30a9603e5aa7148b3a864e5a  → 已加密</span><br><span class="line">ClientGeneral.db 83df6ee683bce77647a3e0831e060e3b  → 已加密</span><br><span class="line">CustomerService.db b866b8b8f7b4f22841c316ad25988518 → 已加密</span><br><span class="line">Emotion.db       59f03fa6082dcc875f7c978d4a29a619  → 已加密</span><br><span class="line">FTSContact.db    a7c194785ff49243f0f15b5b4c6c487b  → 已加密</span><br><span class="line">FTSFavorite.db   0ccb8ea74dab4e8296033234b311bc88  → 已加密</span><br><span class="line">FTSMsg.db        6f137ba01c65c006acc4ee828c004800  → 已加密</span><br><span class="line">Favorite.db      758b6a94d7f464e19127220012f12e93  → 已加密</span><br></pre></td></tr></table></figure>
-<p>而且这些文件时间戳是 2025-04 的旧数据，与当前登录态不同步。</p>
-<h3 id="3.-最小化时截图是纯色空图"><a href="#3.-最小化时截图是纯色空图" class="headerlink" title="3. 最小化时截图是纯色空图"></a>3. 最小化时截图是纯色空图</h3>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">截图 1358x1716</span><br><span class="line">采样像素种类数: 2</span><br><span class="line">采样值: [0, 255]</span><br><span class="line">OCR 识别行数: 0</span><br></pre></td></tr></table></figure>
-<p>和企业微信完全一致的冻结行为。</p>
-<h3 id="4.-顺带修了-screen.py-的一个真-bug"><a href="#4.-顺带修了-screen.py-的一个真-bug" class="headerlink" title="4. 顺带修了 screen.py 的一个真 bug"></a>4. 顺带修了 <code>screen.py</code> 的一个真 bug</h3>
-<p>测微信时发现：<code>GetWindowRect</code> 在最小化时<strong>不一定</strong>返回 -32000 那种典型坐标。
-微信最小化后返回的是 <strong><code>314x50</code></strong> 的小矩形，导致我原来的判断失效：</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"># 错误：以为最小化一定是 -32000</span><br><span class="line">if r.left &lt;= -20000 or r.top &lt;= -20000:</span><br><span class="line">    r = plc.rcNormalPosition</span><br><span class="line"></span><br><span class="line"># 正确：直接用 IsIconic 判断</span><br><span class="line">if r.left &lt;= -20000 or r.top &lt;= -20000 or user32.IsIconic(hwnd):</span><br><span class="line">    r = plc.rcNormalPosition</span><br></pre></td></tr></table></figure>
-<p>这个 bug 对企微同样存在。</p>
-<hr />
-<h2 id="三、对个人微信唯一可用的路"><a href="#三、对个人微信唯一可用的路" class="headerlink" title="三、对个人微信唯一可用的路"></a>三、对个人微信唯一可用的路</h2>
-<p><strong>屏幕 OCR</strong>（与企业微信同一套 <code>screen.py</code>），同样要求窗口真实显示在屏幕上、
-且停在聊天列表页。没有第二条路。</p>
-    
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
-      
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
-    <link itemprop="mainEntityOfPage" href="https://qinguobin.github.io/2026/10/17/wecom-read-test/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="qinguobin">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Hexo">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          
-            <a href="/2026/10/17/wecom-read-test/" class="post-title-link" itemprop="url">实测记录 01 · 企业微信消息读取通道的四条路</a>
-        </h2>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建于: 2026-10-17 10:00:00" itemprop="dateCreated datePublished" datetime="2026-10-17T10:00:00+08:00">2026-10-17</time>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-      <p>目标：证明"能否在不操作鼠标键盘的前提下，自动读到企业微信里别人发来的消息"。</p>
-<p>结论先行：<strong>只有「屏幕 OCR」一条路可用，且企微窗口必须真实显示在屏幕的「消息」页。</strong></p>
-<hr />
-<h2 id="路径一：客户端-UI-自动化（UIA）——-❌-死路"><a href="#路径一：客户端-UI-自动化（UIA）——-❌-死路" class="headerlink" title="路径一：客户端 UI 自动化（UIA）—— ❌ 死路"></a>路径一：客户端 UI 自动化（UIA）—— ❌ 死路</h2>
-<p>企业微信是 <strong>Flutter 渲染</strong>，Flutter 默认不向 Windows 的 UI Automation 暴露无障碍树。</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">企微主窗口 class = WeWorkWindow</span><br><span class="line">  └─ 唯一子窗口 class = FLUTTERVIEW</span><br><span class="line">      └─ UIA 遍历结果：只有 2 个节点，Name 均为空</span><br></pre></td></tr></table></figure>
-<p>复现脚本：<code>tools/probe_windows.py</code></p>
-<p>直接后果：</p>
-<ul>
-<li>读不到任何一条聊天文本；</li>
-<li>也点不动任何会话（"右键 → 标记为已读"这类操作无从下手）；</li>
-<li>后面"勾掉后消角标"只能改走快捷键路线。</li>
+<li>
+<p><strong>一会话一张卡</strong>：同一个联系人/群的多条消息合并成一卡，
+  卡内按时间从上到下排，不分框。</p>
+</li>
+<li>
+<p><strong>两级勾掉</strong>：行首 ☐ 勾掉单条；卡片头 ☐ 勾掉整个会话。</p>
+</li>
+<li><strong>收起只留标题条</strong>：单击标题条展开（别学我第一版绑了双击，用户以为点不动）。</li>
+<li><strong>收起状态不保存窗口尺寸</strong>（否则重启后只剩一条 34px 的标题栏，内容全没）。</li>
 </ul>
 <hr />
-<h2 id="路径二：官方连接器（wecom-cli-1.3.4）——-❌-死路（企业层未开通）"><a href="#路径二：官方连接器（wecom-cli-1.3.4）——-❌-死路（企业层未开通）" class="headerlink" title="路径二：官方连接器（wecom-cli 1.3.4）—— ❌ 死路（企业层未开通）"></a>路径二：官方连接器（<code>wecom-cli</code> 1.3.4）—— ❌ 死路（企业层未开通）</h2>
-<p>连接器本身是通的（<code>auth show --status</code> → <code>authorized</code>），但读消息的接口被拦在企业层。</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ wecom-cli chat messages list --chat-id 秦国彬  → errcode 853006</span><br><span class="line">$ wecom-cli chat messages list --chat-id wmXXXX  → errcode 853006</span><br><span class="line">$ wecom-cli chat messages list --chat-id &lt;机器人ID&gt; → errcode 853006</span><br><span class="line">$ wecom-cli chat messages list --chat-id test    → errcode 853006</span><br><span class="line">$ wecom-cli chat groups list                     → errcode 853006</span><br></pre></td></tr></table></figure>
-<p><strong>关键推理</strong>：4 个 ID 里有 3 个是瞎编的（<code>wmXXXX</code> / <code>test</code>），却返回同一个错误码，
-说明拦截发生在<strong>校验 chat-id 之前</strong>，是<strong>企业层级的功能开关</strong>，不是参数问题：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">this tool is not available for your corporation</span><br></pre></td></tr></table></figure>
-<p>通讯录接口同样被拦：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ wecom-cli contact users search --keywords &quot;秦&quot;  → errcode 850002</span><br></pre></td></tr></table></figure>
-<p><strong>全量普查</strong>（证明没有任何"收消息"命令存在）：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">wecom-cli message recv      → unrecognized subcommand</span><br><span class="line">wecom-cli message receive   → unrecognized subcommand</span><br><span class="line">wecom-cli message pull      → unrecognized subcommand</span><br><span class="line">wecom-cli message list      → unrecognized subcommand</span><br><span class="line">wecom-cli message aibot recv → unrecognized subcommand</span><br><span class="line">wecom-cli chat recv         → unrecognized subcommand</span><br><span class="line">wecom-cli webhook           → unrecognized subcommand</span><br><span class="line">wecom-cli callback          → unrecognized subcommand</span><br></pre></td></tr></table></figure>
-<p>唯一能正常返回的读类接口是 <code>message aibot sessions list</code>，但它只返回<strong>机器人自己</strong>
-会话的<strong>元数据</strong>，且当前为空，<strong>没有任何命令能读这些会话的消息正文</strong>：</p>
-<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">{&quot;sessions_count&quot;: 0}</span><br></pre></td></tr></table></figure>
+<h2 id="第七步：勾掉的同时，消掉企微里的角标"><a href="#第七步：勾掉的同时，消掉企微里的角标" class="headerlink" title="第七步：勾掉的同时，消掉企微里的角标"></a>第七步：勾掉的同时，消掉企微里的角标</h2>
+<p>企微没有开放"标记已读"的接口，Flutter 下 UIA 也点不动会话。
+实测可用的主路线是<strong>快捷键</strong>：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">激活企微 → Ctrl+F 唤起搜索 → 粘贴会话名 → 回车打开会话</span><br><span class="line">→ 角标清除 → Esc → 切回你原来的窗口</span><br></pre></td></tr></table></figure>
+<p><code>Ctrl+F</code> 这条我实测确认能唤起企微搜索框。如果某台机器上不灵：</p>
+<ul>
+<li>
+<p>先跑 <code>tools/test_hotkey.py k</code> 试试 <code>Ctrl+K</code>，好用就把配置里
+  <code>mark_read.search_key</code> 改成 <code>"k"</code>；</p>
+</li>
+<li>
+<p>或者直接鼠标点搜索框：设 <code>mark_read.click_search_offset = [160, 24]</code>。</p>
+</li>
+</ul>
 <blockquote>
-<p>顺带的坑：<code>wecom-cli</code> 只在 Git Bash 的 PATH 里，Windows 原生环境找不到，
-从 Python subprocess 调用必须写完整路径 <code>…\cli-connector-packages\wecom-cli.cmd</code>。</p>
+<p>注意一个产品细节：<strong>在企微里先读了消息，桌面上的固定内容不会被移除</strong>。
+桌面卡片只认你手动勾掉——这是刻意设计的，避免"看了一眼企微，待办就丢了"。</p>
 </blockquote>
-<p><strong>结论：连接器能发不能收。想让它能读，需企业管理员开通「会话内容存档」。</strong></p>
 <hr />
-<h2 id="路径三：Windows-系统通知（Toast）——-❌-死路（本机企微根本不弹）"><a href="#路径三：Windows-系统通知（Toast）——-❌-死路（本机企微根本不弹）" class="headerlink" title="路径三：Windows 系统通知（Toast）—— ❌ 死路（本机企微根本不弹）"></a>路径三：Windows 系统通知（Toast）—— ❌ 死路（本机企微根本不弹）</h2>
-<p>企微的通知是系统层渲染的，理论上不受 Flutter 限制，能被 UIA 捕获。实测：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">tools/probe_toast.py    运行 180 秒 → 0 条</span><br><span class="line">tools/probe_toast2.py   运行 240 秒 → 0 条</span><br><span class="line">tools/probe_toast2.py   运行 150 秒 → 0 条</span><br></pre></td></tr></table></figure>
-<p>150～240 秒内企微<strong>一个通知窗口都没弹过</strong>。（前提是用户确实在此期间发了消息。）</p>
-<p>之前还试过直接解析 Windows 通知历史库 <code>%LOCALAPPDATA%\…\wpndatabase.db</code>（ESE 格式），
-但 <code>pyesedb</code> 编译装不上，这条路也断了。</p>
+<h2 id="第八步：让它跟着企业微信自动启停"><a href="#第八步：让它跟着企业微信自动启停" class="headerlink" title="第八步：让它跟着企业微信自动启停"></a>第八步：让它跟着企业微信自动启停</h2>
+<p>一个看门狗脚本监听 <code>WXWork.exe</code> 进程：企微打开 → 自动拉起程序；
+企微关闭 → 自动退出（待办已存盘，不丢）。</p>
+<p>再加开机自启：在系统启动项放一个几 KB 的 vbs 入口，
+登录后静默常驻。<strong>但有一点必须说清：程序得由你双击 <code>Start.bat</code> 启动，
+或者等下次开机自动起来</strong>——从终端/自动化环境里拉起的进程会被系统回收，
+<code>Start-Process</code>、<code>wscript</code>、<code>schtasks</code> 全试过，都活不下来。</p>
 <hr />
-<h2 id="路径四：屏幕截图-+-OCR-——-⚠️-可用，但有硬边界"><a href="#路径四：屏幕截图-+-OCR-——-⚠️-可用，但有硬边界" class="headerlink" title="路径四：屏幕截图 + OCR —— ⚠️ 可用，但有硬边界"></a>路径四：屏幕截图 + OCR —— ⚠️ 可用，但有硬边界</h2>
-<p><strong>这是唯一走通的路。</strong> 原理：Flutter 虽然不暴露控件树，但它最终要把像素画到窗口上。</p>
-<h3 id="关键突破-1：用-PrintWindow-而非-BitBlt"><a href="#关键突破-1：用-PrintWindow-而非-BitBlt" class="headerlink" title="关键突破 1：用 PrintWindow 而非 BitBlt"></a>关键突破 1：用 <code>PrintWindow</code> 而非 <code>BitBlt</code></h3>
-<p>一开始用 <code>BitBlt</code> 抓窗口，抓到的是<strong>过期帧</strong>（画面永远停在若干分钟前），
-这是"用户发了消息、程序毫无反应"的直接原因。</p>
-<p>原因是 Flutter 走 DirectComposition 合成，普通 DC 拷贝拿不到当前内容。
-改用 <code>PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT)</code> <strong>强制重渲染</strong>后才拿到真实画面。</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">PW_RENDERFULLCONTENT = 2</span><br><span class="line">ok = user32.PrintWindow(hwnd, mem, PW_RENDERFULLCONTENT)</span><br><span class="line">if not ok:</span><br><span class="line">    gdi32.BitBlt(mem, 0, 0, w, h, hdc, 0, 0, SRCCOPY)   # 回退</span><br></pre></td></tr></table></figure>
-<h3 id="关键突破-2：OCR-前先放大-2-倍"><a href="#关键突破-2：OCR-前先放大-2-倍" class="headerlink" title="关键突破 2：OCR 前先放大 2 倍"></a>关键突破 2：OCR 前先放大 2 倍</h3>
-<p>Windows OCR 对 12px 小字识别率很差。用 GDI <code>HALFTONE</code> 模式高质量放大 2 倍后，
-识别质量可用（人名偶有误差，消息正文基本准确）。</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">gdi32.SetStretchBltMode(mem2, HALFTONE)</span><br><span class="line">gdi32.SetBrushOrgEx(mem2, 0, 0, 0)</span><br><span class="line">gdi32.StretchBlt(mem2, 0, 0, W, H, mem, 0, 0, w, h, SRCCOPY)</span><br></pre></td></tr></table></figure>
-<p>引擎用 Windows 自带的 <code>Windows.Media.Ocr</code>（<code>winsdk</code> 包），本机中文语言包可用：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">available OCR languages: [... 'zh-Hans-CN' ...]</span><br></pre></td></tr></table></figure>
-<blockquote>
-<p>坑：WinRT 的 <code>IAsyncOperation</code> 不能自己造 event loop 去 await，
-要用事件驱动的方式同步等待，否则卡死。</p>
-<p>另一个坑：Pillow 装不上（网络/编译问题），索性用标准库 <code>zlib</code> + <code>struct</code>
-手写 PNG 编码，零依赖。</p>
-</blockquote>
-<h3 id="硬边界：企微一旦&amp;quot;看不见&amp;quot;，画面就冻结"><a href="#硬边界：企微一旦&quot;看不见&quot;，画面就冻结" class="headerlink" title="硬边界：企微一旦&quot;看不见&quot;，画面就冻结"></a>硬边界：企微一旦"看不见"，画面就冻结</h3>
-<p>这是最要命的发现，用内容指纹（对 OCR 行做 md5）做的受控实验：</p>
-<table>
-<thead>
-<tr>
-<th>企微窗口状态</th>
-<th>现象</th>
-<th>结论</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>正常显示在屏幕</td>
-<td>指纹随新消息变化</td>
-<td>✅ 可用</td>
-</tr>
-<tr>
-<td><strong>最小化到任务栏</strong></td>
-<td>用户发消息后 70 秒，指纹纹丝不动</td>
-<td>❌ 冻结</td>
-</tr>
-<tr>
-<td><strong>移到屏幕外</strong>（未最小化）</td>
-<td>2.5 分钟无变化；移回屏幕内<strong>立刻</strong>变化</td>
-<td>❌ 冻结</td>
-</tr>
-<tr>
-<td>切到「工作台/文档」页</td>
-<td>没有会话列表可识别</td>
-<td>❌ 无内容</td>
-</tr>
-<tr>
-<td>被其它窗口完全盖住</td>
-<td>仍可读（PrintWindow 强制重渲染）</td>
-<td>✅ 可用</td>
-</tr>
-<tr>
-<td>在另一个虚拟桌面</td>
-<td>仍可读</td>
-<td>✅ 可用</td>
-</tr>
-</tbody>
-</table>
-<p>结论：<strong>企微必须"真的显示在屏幕上"，且停在「消息」页</strong>。
-被别的窗口盖住没关系（这是好消息——可以把它藏在后面）。</p>
-<p>所以"企微最小化也能实时读到"这个最初的判断是<strong>错的</strong>，后来被推翻。</p>
+<h2 id="第九步：最值得记住的几个坑"><a href="#第九步：最值得记住的几个坑" class="headerlink" title="第九步：最值得记住的几个坑"></a>第九步：最值得记住的几个坑</h2>
+<p>34 个坑里挑最狠的 8 个，每个都够你查半天：</p>
+<ol>
+<li>
+<p><strong>64 位 ctypes 不设 <code>restype</code>，句柄被截断</strong>。<code>GetClipboardData</code> 返回的
+   64 位句柄被当成 32 位 <code>c_int</code>，剪贴板永远读成空字符串——
+   我因此一度误判"Ctrl+F 唤起搜索失败"，其实快捷键一直是好的。
+   <strong>教训：64 位 Windows 上，任何返回指针/句柄的 Win32 函数都必须显式设 <code>restype</code>。</strong></p>
+</li>
+<li>
+<p><strong><code>BitBlt</code> 抓 Flutter 窗口只能拿到过期帧</strong>（见第四步第 1 点）。</p>
+</li>
+<li>
+<p><strong>最小化 = 画面冻结</strong>。受控实验：用户发消息后盯 70 秒，画面指纹纹丝不动；
+   移到屏幕外也一样，移回屏幕内<strong>立刻</strong>恢复。企微最小化时停止渲染，
+   这是操作系统 + Flutter 的硬行为，绕不过去。</p>
+</li>
+<li>
+<p><strong><code>GetWindowRect</code> 在最小化时不一定是 <code>(-32000, -32000)</code></strong>——
+   微信最小化返回的是 <code>314x50</code> 的小矩形。所以要用 <code>IsIconic()</code> 判断，
+   再用 <code>GetWindowPlacement</code> 拿还原矩形。</p>
+</li>
+<li>
+<p><strong>企微有多个标题都叫"企业微信"的窗口</strong>，不判断当前停在哪一页，
+   就会把工作台的"审批""打卡"当成消息，生成一堆垃圾待办。</p>
+</li>
+<li>
+<p><strong><code>@所有人</code> 被当成 <code>@我</code></strong>（见第五步）。</p>
+</li>
+<li><strong>"无需回复"被误判成待办</strong>（见第五步）。</li>
+<li><strong>改了代码但进程里跑的是旧版本</strong>——删掉 <code>__pycache__</code> 再重启，
+   别对着旧代码debug半天。</li>
+</ol>
+<hr />
+<h2 id="最后：成果与边界"><a href="#最后：成果与边界" class="headerlink" title="最后：成果与边界"></a>最后：成果与边界</h2>
+<p><strong>做到了的</strong>（企微窗口可见时全自动）：</p>
+<ul>
+<li>打开企微自动弹出小组件，关掉自动退出</li>
+<li>自动捕获新消息 → AI 判断 → 钉到桌面 → 一键勾掉 → 顺带清角标</li>
+<li>一会话一卡、按时间排、两级勾掉、群消息只收 @我</li>
+</ul>
+<p><strong>做不到的</strong>（客观限制，不是代码问题）：</p>
+<ul>
+<li>
+<p>企微<strong>最小化 / 移出屏幕 / 停在工作台页</strong>时读不到
+  （想眼不见为净，就用别的窗口盖住它，或扔到另一个虚拟桌面——这两种都照读不误）</p>
+</li>
+<li>
+<p>用官方接口读聊天记录（企业未开通「会话内容存档」）</p>
+</li>
+<li>读个人微信消息（官方无此 API）</li>
+</ul>
+<p><strong>唯一能根治"只要登录就一定读到"的路</strong>：让企业管理员开通
+<strong>「会话内容存档」</strong>（付费功能）。开通后服务端直接拿聊天记录，
+跟窗口状态完全无关。读取模块我已经写好备着了，企业一开通即用。</p>
+<p>完整源码和更细的踩坑记录在 GitHub：</p>
+<ul>
+<li>仓库：<a href="https://github.com/qinguobin/wecom-desktop-alert" target="_blank" rel="noopener">https://github.com/qinguobin/wecom-desktop-alert</a></li>
+<li><code>README.md</code>：功能清单 + 安装配置</li>
+<li><code>PITFALLS.md</code>：34 个坑，每个都有「症状 → 根因 → 解法」</li>
+</ul>
     
     </div>
 
