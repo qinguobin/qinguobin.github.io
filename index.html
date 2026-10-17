@@ -180,235 +180,86 @@
     
     
     <div class="post-body" itemprop="articleBody">
-      <p>这是我的第二篇博文。上一篇教大家搭了自己的博客，这一篇记一次<strong>不太成功的尝试</strong>：
-想把企业微信里需要你处理的消息自动钉到桌面最上层，处理完一键勾掉，
-顺带把企微里的未读红点也消掉——<strong>最后只做成了一半，而且有个绕不过去的硬条件</strong>：
-企微窗口必须真实显示在屏幕上。我最初"任何时候只要登录就能读到"的目标，并没有达到。</p>
-<p>丑话说在前面，这篇不包装成成功学：<strong>企业微信的聊天记录，官方不让你读。</strong>
-我把哪几条路走不通、哪条路能走通、边界在哪里，全部用实测讲清楚。
-你照着做，半天能跑起来；看完更能少撞几天墙——以及提前知道哪些事做不到。</p>
-<p>篇幅有点长，分为九步。</p>
-<hr />
-<h2 id="第一步：先摸清企微的底，再决定怎么做"><a href="#第一步：先摸清企微的底，再决定怎么做" class="headerlink" title="第一步：先摸清企微的底，再决定怎么做"></a>第一步：先摸清企微的底，再决定怎么做</h2>
-<p>需求一句话：企微收到消息 → 判断要不要你处理 → 钉在桌面。听起来不难，
-但我动工前先把四条读取通道全验证了一遍，<strong>三条是死的</strong>：</p>
-<table>
-<thead>
-<tr>
-<th>通道</th>
-<th>结论</th>
-<th>证据</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>客户端 UI 自动化（UIA）</td>
-<td>❌ 死路</td>
-<td>企微是 Flutter 渲染，主窗口 <code>WeWorkWindow</code> 下只有一个 <code>FLUTTERVIEW</code>，UIA 只能读到 2 个空节点</td>
-</tr>
-<tr>
-<td>官方连接器 <code>wecom-cli</code></td>
-<td>❌ 死路</td>
-<td><code>chat messages list</code> 一律返回 <code>errcode 853006</code>「企业未开通会话存档」</td>
-</tr>
-<tr>
-<td>Windows 系统通知</td>
-<td>❌ 死路</td>
-<td>通知探针跑了 240 秒，企微一条通知都没弹</td>
-</tr>
-<tr>
-<td><strong>屏幕截图 + OCR</strong></td>
-<td>⚠️ 唯一走通</td>
-<td>见第四步</td>
-</tr>
-</tbody>
-</table>
-<p>两个关键推理，帮你少走弯路：</p>
-<ul>
-<li>
-<p><strong>853006 不是授权问题</strong>。我用 4 个 chat-id 试，其中 3 个是瞎编的（<code>wmXXXX</code> / <code>test</code>），
-  全部返回同一个错误码——说明拦截发生在校验 ID 之前，是<strong>企业层级的功能开关</strong>。
-  所以别再去点授权了，授权解决不了。</p>
-</li>
-<li>
-<p><strong>企微虽然不暴露控件树，但它最终要把像素画到窗口上</strong>——像素是绕不过去的。
-  这就是 OCR 路线能成立的根因。</p>
-</li>
-</ul>
-<blockquote>
-<p>顺带回答一个高频问题：<strong>个人微信更读不到</strong>。微信官方压根没有
-"读取个人聊天记录"的 API（只开放公众号 / 小程序 / 企业微信三类），
-本地 12 个数据库又全部是 SQLCipher 加密。不是权限问题，是这个能力不存在。</p>
-</blockquote>
-<hr />
-<h2 id="第二步：准备环境"><a href="#第二步：准备环境" class="headerlink" title="第二步：准备环境"></a>第二步：准备环境</h2>
-<p>一句话：<strong>全装 D 盘，别碰 C 盘</strong>。</p>
-<ol>
-<li>装官方 Python 3.12 到 D 盘。静默安装时有个<strong>必须加的参数</strong>：</li>
-</ol>
+      <p>这是我的第二篇博文。上一篇教大家搭了自己的博客，这一篇我想说说我折腾企业微信的一件事：把企微里需要我处理的消息自动钉到桌面最上面，处理完一键勾掉，顺便把企微里的未读红点也消了。</p>
+<p>先说结果吧，省得你抱太大期望：最后只做成了一半。有个绕不过去的硬条件是企微窗口得真真实实摆在屏幕上。我一开始想的"只要企微登录着，不管它在干嘛都能读到消息"这个目标，没达到。所以这篇不算是成功教程，更多是我踩了一堆坑之后，把哪些路走得通、哪些走不通讲清楚，你照着弄能少撞几天墙。</p>
+<p>说白了，企业微信的聊天记录，官方压根不让你读。下面把这件事从头到尾说一遍。</p>
+<h2 id="第一步：先把企微摸清楚，再动手"><a href="#第一步：先把企微摸清楚，再动手" class="headerlink" title="第一步：先把企微摸清楚，再动手"></a>第一步：先把企微摸清楚，再动手</h2>
+<p>需求其实一句话：企微来消息了 → 判断一下要不要我处理 → 钉到桌面上。听起来挺简单，但我真动手之前，先把能读的四条路都试了一遍，结果三条都是死路。</p>
+<p>第一条，用客户端自带的界面自动化（UIA）。不行。企微整个界面是用 Flutter 画的，主窗口底下就一个 FLUTTERVIEW，界面自动化只能读到两个空节点，啥也抓不到。</p>
+<p>第二条，走官方连接器 wecom-cli 去读消息。也不行。不管我怎么试，它都回一个 errcode 853006，意思是"你们公司没开会话存档"。我当时还不死心，换了四个不同的会话 id 去试，其中三个是我瞎编的，结果还是一个错。这就说明，拦截发生在校验 id 之前，是公司层面的开关，不是你授权不授权的问题。所以别再去点授权了，点了也没用。</p>
+<p>第三条，等 Windows 的系统通知。还是不行。我专门写了个探针挂在那跑，等了四分钟，企微一条通知都没弹出来。</p>
+<p>第四条，屏幕截图加 OCR 识别。这条总算走通了，后面细说。</p>
+<p>为什么前三条都不行、就最后这条行？因为企微虽然不把界面结构（控件树）露出来，但它最后总得把字和图一笔一笔画到窗口上。画出来的像素是躲不掉的，截图加识别就是从这上面想办法。</p>
+<p>顺带说一句，有人问我个人微信能不能也读。更不行。微信官方压根没开放"读个人聊天记录"的接口，只开放了公众号、小程序、企业微信这三类。本地的数据库倒是有一堆，可全是加密的，打不开。所以这不是权限问题，是压根没这功能。</p>
+<h2 id="第二步：把环境准备好"><a href="#第二步：把环境准备好" class="headerlink" title="第二步：把环境准备好"></a>第二步：把环境准备好</h2>
+<p>一句话，全装 D 盘，别碰 C 盘，我 C 盘空间紧。</p>
+<p>先装官方 Python 3.12 到 D 盘。这里有个坑得提醒你，静默安装的时候有个参数必须带上：</p>
 <figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">python-installer.exe /quiet InstallAllUsers=0 TargetDir=D:\Python312 `</span><br><span class="line">  AssociateFiles=0 Shortcuts=0 Include_launcher=0 PrependPath=0 Include_tcltk=1</span><br></pre></td></tr></table></figure>
-<p><code>Include_tcltk=1</code> 就是关键——<strong>默认静默安装不带 tkinter</strong>，
-而 tkinter 是 Windows 上做置顶小窗最省事的选择。我在这上面先撞了一次墙。</p>
-<ol start="2">
-<li>装两个依赖：</li>
-</ol>
+<p>不带上 Include_tcltk=1，默认装出来的 Python 是没有 tkinter 的，而 tkinter 正好是我做桌面置顶小窗最省事的选择。我为此多耗了不少时间。</p>
+<p>再装两个库：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pip install winsdk uiautomation</span><br></pre></td></tr></table></figure>
-<p><code>winsdk</code> 是调 Windows 自带中文 OCR 的（本机有 <code>zh-Hans-CN</code> 语言包，零额外依赖）；
-<code>uiautomation</code> 先备着，企微改版成可自动化界面后能直接用。</p>
-<ol start="3">
-<li>项目结构和数据也全放 D 盘：</li>
-</ol>
+<p>winsdk 是用来调 Windows 自带的中文 OCR 的，本机自带 zh-Hans-CN 语言包，不用额外下东西；uiautomation 先备着，哪天企微改成能自动化的界面了就能用上。</p>
+<p>项目本身和数据也全放 D 盘，目录大概是这样：</p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">D:\WeComDesktopAlert\</span><br><span class="line">├── main.py        # 入口：捕获 → 过滤 → 判断 → 显示</span><br><span class="line">├── screen.py      # 屏幕捕获 + OCR（主通道）</span><br><span class="line">├── widget.py      # 桌面置顶小组件</span><br><span class="line">├── capture.py     # 剪贴板 + Ctrl+Alt+Space 热键</span><br><span class="line">├── classifier.py  # AI 判断 + 关键词兜底</span><br><span class="line">├── markread.py    # 勾掉后在企微里标记已读</span><br><span class="line">├── watchdog.py    # 随企微启停的看门狗</span><br><span class="line">├── storage.py     # 待办持久化</span><br><span class="line">└── config.json    # 填你的企微昵称（群内 @ 识别靠它）</span><br></pre></td></tr></table></figure>
-<hr />
-<h2 id="第三步：认清整体架构"><a href="#第三步：认清整体架构" class="headerlink" title="第三步：认清整体架构"></a>第三步：认清整体架构</h2>
-<p>数据流向一张图看懂：</p>
+<h2 id="第三步：先看清整个东西是怎么转的"><a href="#第三步：先看清整个东西是怎么转的" class="headerlink" title="第三步：先看清整个东西是怎么转的"></a>第三步：先看清整个东西是怎么转的</h2>
+<p>数据流其实不复杂，我画个草图：</p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">                    ┌─ 屏幕捕获（主通道）screen.py ─ PrintWindow + OCR ─┐</span><br><span class="line">企微窗口 ───────────┤                                                   │</span><br><span class="line">                    ├─ 剪贴板捕获      capture.py ─ 企微内右键复制      ─┤</span><br><span class="line">                    └─ 全局热键        capture.py ─ Ctrl+Alt+Space     ─┘</span><br><span class="line">                                    ▼</span><br><span class="line">                    Pipeline（main.py）</span><br><span class="line">                    ├─ 群消息？没 @我 → 直接丢弃</span><br><span class="line">                    └─ AI / 关键词判断 → 要不要你处理</span><br><span class="line">                                    ▼</span><br><span class="line">                    桌面置顶小组件（widget.py）</span><br><span class="line">                    ├─ 一会话一卡，卡内按时间排序</span><br><span class="line">                    ├─ 勾掉单条 / 勾掉整卡</span><br><span class="line">                    └─ 勾掉 → markread.py → 企微里标为已读</span><br></pre></td></tr></table></figure>
-<hr />
-<h2 id="第四步：屏幕捕获——全项目最核心的一段"><a href="#第四步：屏幕捕获——全项目最核心的一段" class="headerlink" title="第四步：屏幕捕获——全项目最核心的一段"></a>第四步：屏幕捕获——全项目最核心的一段</h2>
-<p>原理：Flutter 不暴露控件树，但<strong>像素总要画到窗口上</strong>，所以截图 + OCR。
-三个必须踩对的点，每个都对应一个"毫无反应"级别的坑：</p>
-<h3 id="1.-用-PrintWindow，不要用-BitBlt"><a href="#1.-用-PrintWindow，不要用-BitBlt" class="headerlink" title="1. 用 PrintWindow，不要用 BitBlt"></a>1. 用 <code>PrintWindow</code>，不要用 <code>BitBlt</code></h3>
+<h2 id="第四步：屏幕捕获，这是整个项目最关键的地方"><a href="#第四步：屏幕捕获，这是整个项目最关键的地方" class="headerlink" title="第四步：屏幕捕获，这是整个项目最关键的地方"></a>第四步：屏幕捕获，这是整个项目最关键的地方</h2>
+<p>原理刚才说了，企微不露控件树，但像素要画出来，所以截图加 OCR。这一块有三个坑，每个都能让你卡到"毫无反应"。</p>
+<h3 id="1.-用-PrintWindow，别用-BitBlt"><a href="#1.-用-PrintWindow，别用-BitBlt" class="headerlink" title="1. 用 PrintWindow，别用 BitBlt"></a>1. 用 PrintWindow，别用 BitBlt</h3>
 <figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">PW_RENDERFULLCONTENT = 2</span><br><span class="line">ok = user32.PrintWindow(hwnd, mem, PW_RENDERFULLCONTENT)</span><br><span class="line">if not ok:</span><br><span class="line">    gdi32.BitBlt(mem, 0, 0, w, h, hdc, 0, 0, SRCCOPY)   # 回退</span><br></pre></td></tr></table></figure>
-<p>企微走 DirectComposition 合成，<code>BitBlt</code> 只能拿到<strong>过期的那一帧</strong>——
-这就是"用户明明发了消息，程序却毫无反应"的真凶。</p>
-<h3 id="2.-OCR-之前先放大-2-倍"><a href="#2.-OCR-之前先放大-2-倍" class="headerlink" title="2. OCR 之前先放大 2 倍"></a>2. OCR 之前先放大 2 倍</h3>
-<p>Windows OCR 对 12px 小字识别率很差。用 GDI <code>HALFTONE</code> 模式高质量放大 2 倍后
-才可用（人名偶有误差，消息正文基本准确）：</p>
+<p>企微的界面是 DirectComposition 合成的，BitBlt 截出来的永远是过期的那一帧——你明明发了消息，程序却跟没看见一样，根因就在这。</p>
+<h3 id="2.-OCR-之前先把图放大两倍"><a href="#2.-OCR-之前先把图放大两倍" class="headerlink" title="2. OCR 之前先把图放大两倍"></a>2. OCR 之前先把图放大两倍</h3>
+<p>Windows 自带的 OCR 对十二像素的小字识别率很差，用 GDI 的 HALFTONE 模式高质量放大两倍之后才靠谱。人名字偶尔会认错，正文基本准：</p>
 <figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">gdi32.SetStretchBltMode(mem2, HALFTONE)</span><br><span class="line">gdi32.SetBrushOrgEx(mem2, 0, 0, 0)</span><br><span class="line">gdi32.StretchBlt(mem2, 0, 0, W, H, mem, 0, 0, w, h, SRCCOPY)</span><br></pre></td></tr></table></figure>
-<h3 id="3.-强制把-alpha-通道填成不透明"><a href="#3.-强制把-alpha-通道填成不透明" class="headerlink" title="3. 强制把 alpha 通道填成不透明"></a>3. 强制把 alpha 通道填成不透明</h3>
-<p>窗口截图的 alpha 是 0，OCR 引擎会当成<strong>全透明图</strong>，直接返回 0 行：</p>
+<h3 id="3.-把透明通道强制填成不透明"><a href="#3.-把透明通道强制填成不透明" class="headerlink" title="3. 把透明通道强制填成不透明"></a>3. 把透明通道强制填成不透明</h3>
+<p>窗口截图出来的图，透明通道是 0，OCR 引擎会把它当成一张全透明的图，直接返回空。所以得手动填上：</p>
 <figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ba = bytearray(buf)</span><br><span class="line">ba[3::4] = b&quot;\xff&quot; * (sw * sh)</span><br></pre></td></tr></table></figure>
 <h3 id="找到&quot;会话列表&quot;那一列"><a href="#找到&quot;会话列表&quot;那一列" class="headerlink" title="找到&quot;会话列表&quot;那一列"></a>找到"会话列表"那一列</h3>
-<p>从整窗 OCR 结果里按 <strong>x 坐标区间</strong>切出列表列（默认 <code>x ∈ [0.15, 0.38]</code>），
-再按 y 排序。还要确认企微停在**「消息」页**——靠列表右侧的
-时间戳特征（<code>刚刚</code> / <code>N分钟前</code> / <code>昨天</code> / <code>HH:MM</code>）判断，
-切到工作台/文档页自动跳过（否则会把"审批""打卡"当成消息）。</p>
-<h3 id="OCR-错字怎么办"><a href="#OCR-错字怎么办" class="headerlink" title="OCR 错字怎么办"></a>OCR 错字怎么办</h3>
-<p><code>@秦国彬</code> 会被识别成 <code>@泰国彬</code> / <code>@孬王彬</code>，精确匹配全漏。
-用 <code>difflib</code> 做相似度模糊匹配；代价是群名也可能误匹配，
-所以保留一个 <code>group_senders</code> 白名单兜底。</p>
-<hr />
-<h2 id="第五步：判断&quot;这条消息要不要你处理&quot;"><a href="#第五步：判断&quot;这条消息要不要你处理&quot;" class="headerlink" title="第五步：判断&quot;这条消息要不要你处理&quot;"></a>第五步：判断"这条消息要不要你处理"</h2>
-<p>三条规则，都是被真实消息教育出来的：</p>
-<ol>
-<li>
-<p><strong>群消息只收 @你本人的</strong>。<code>@所有人</code> / <code>@全体成员</code> <strong>一律不算</strong>——
-   群里 @所有人 大多是公告，钉上去只会干扰你。</p>
-</li>
-<li>
-<p><strong>先扫否定词</strong>。"公司年会照片已上传，<strong>无需回复</strong>"这种，
-   命中"回复"俩字会被误判成待办；所以先扫 <code>无需 / 不用 / 不必 / 已通过</code>，
-   命中直接判为无需处理。</p>
-</li>
-<li>
-<p><strong>AI 判断 + 关键词兜底</strong>。共用任意 OpenAI 兼容接口
-   （DeepSeek / 通义 / Kimi / Ollama 都行），输出"要不要处理 + 优先级 + 一句话理由"，
-   理由直接显示在卡片上。不配 key 也能跑，自动降级为关键词规则。</p>
-</li>
-</ol>
-<hr />
+<p>从整张图的识别结果里，按 x 坐标的区间把左边那一列切出来，再按 y 排好（默认区间在 x 的 0.15 到 0.38 之间）。还得确认企微现在停在"消息"页，靠列表右边的时间戳（"刚刚""几分钟前""昨天""几点几分"这种）来判断。要是它停在工作台或者文档页，就跳过，不然会把"审批""打卡"这种当成消息。</p>
+<h3 id="OCR-认错字怎么办"><a href="#OCR-认错字怎么办" class="headerlink" title="OCR 认错字怎么办"></a>OCR 认错字怎么办</h3>
+<p>比如"@秦国彬"会被认成"@泰国彬"或者"@孬王彬"，精确匹配全漏。我用 difflib 做相似度模糊匹配，代价是群名也可能误匹配，所以又留了个白名单兜底。</p>
+<h2 id="第五步：判断这条消息要不要我处理"><a href="#第五步：判断这条消息要不要我处理" class="headerlink" title="第五步：判断这条消息要不要我处理"></a>第五步：判断这条消息要不要我处理</h2>
+<p>这块三条规则，都是被真实的消息教训出来的。</p>
+<p>一是群消息只收 @我本人的。@所有人、@全体成员一律不算，因为群里 @全体大多是公告，钉上去反而烦你。</p>
+<p>二是先扫否定词。像"公司年会照片已上传，无需回复"这种，光看"回复"俩字会被误判成待办，所以先扫"无需、不用、不必、已通过"，命中了就直接判成不用处理。</p>
+<p>三是 AI 判断加关键词兜底。用的是任意 OpenAI 兼容的接口，DeepSeek、通义、Kimi、Ollama 都行，让它输出"要不要处理、优先级、一句话理由"，理由直接显示在卡片上。你不配 key 也能跑，会自动降级成关键词规则。</p>
 <h2 id="第六步：做一块常驻桌面的小组件"><a href="#第六步：做一块常驻桌面的小组件" class="headerlink" title="第六步：做一块常驻桌面的小组件"></a>第六步：做一块常驻桌面的小组件</h2>
-<p>用 tkinter，无边框 + 置顶 + 可拖动 + 可滚动。交互上是用户骂出来的：</p>
-<ul>
-<li>
-<p><strong>一会话一张卡</strong>：同一个联系人/群的多条消息合并成一卡，
-  卡内按时间从上到下排，不分框。</p>
-</li>
-<li>
-<p><strong>两级勾掉</strong>：行首 ☐ 勾掉单条；卡片头 ☐ 勾掉整个会话。</p>
-</li>
-<li><strong>收起只留标题条</strong>：单击标题条展开（别学我第一版绑了双击，用户以为点不动）。</li>
-<li><strong>收起状态不保存窗口尺寸</strong>（否则重启后只剩一条 34px 的标题栏，内容全没）。</li>
-</ul>
-<hr />
-<h2 id="第七步：勾掉的同时，消掉企微里的角标"><a href="#第七步：勾掉的同时，消掉企微里的角标" class="headerlink" title="第七步：勾掉的同时，消掉企微里的角标"></a>第七步：勾掉的同时，消掉企微里的角标</h2>
-<p>企微没有开放"标记已读"的接口，Flutter 下 UIA 也点不动会话。
-实测可用的主路线是<strong>快捷键</strong>：</p>
+<p>用 tkinter，无边框、置顶、可拖动、可滚动。这里的好几个交互都是被用户骂出来的。</p>
+<p>同一个联系人或者群的多条消息，合并成一张卡片，卡里按时间从上往下排，不分框。每张卡有两级勾掉：行首的小方框勾掉单条，卡片头的勾掉整个会话。收起的时候只留标题条，单击标题条就展开——别学我第一版绑成了双击，用户还以为点不动。还有，收起状态不要保存窗口尺寸，不然重启之后只剩一条三十四像素的标题栏，内容全没了。</p>
+<h2 id="第七步：勾掉的同时，把企微里的角标消掉"><a href="#第七步：勾掉的同时，把企微里的角标消掉" class="headerlink" title="第七步：勾掉的同时，把企微里的角标消掉"></a>第七步：勾掉的同时，把企微里的角标消掉</h2>
+<p>企微没有开放"标为已读"的接口，Flutter 下面界面自动化也点不动会话。我实测下来，能走通的主路线是快捷键：</p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">激活企微 → Ctrl+F 唤起搜索 → 粘贴会话名 → 回车打开会话</span><br><span class="line">→ 角标清除 → Esc → 切回你原来的窗口</span><br></pre></td></tr></table></figure>
-<p><code>Ctrl+F</code> 这条我实测确认能唤起企微搜索框。如果某台机器上不灵：</p>
+<p>Ctrl+F 这条我实测能唤起企微的搜索框。万一你那台机器不灵，可以先跑 tools/test_hotkey.py k 试试 Ctrl+K，好使就把配置里的 mark_read.search_key 改成 "k"；或者直接鼠标点搜索框，设个 mark_read.click_search_offset = [160, 24]。</p>
+<p>有个细节得说清楚：你在企微里先把消息读了，桌面上钉着的内容不会被移除。桌面卡片只认你手动勾掉——这是我故意这么设计的，免得你只是在企微里扫了一眼，待办就没了。</p>
+<h2 id="第八步：让它跟着企微自动启停"><a href="#第八步：让它跟着企微自动启停" class="headerlink" title="第八步：让它跟着企微自动启停"></a>第八步：让它跟着企微自动启停</h2>
+<p>写了个看门狗脚本盯着 WXWork.exe 这个进程：企微打开，它就自动把程序拉起来；企微关了，它自己退出，待办都存着盘，不丢。</p>
+<p>再加个开机自启，在系统启动项里放一个几 KB 的 vbs 入口，登录之后静默常驻。不过有一点必须说清楚：程序得由你双击那个 Start.bat 启动，或者等下次开机自己起来。从终端或者自动化环境里拉起来的进程，会被系统收走，Start-Process、wscript、schtasks 我都试过，都活不下来。</p>
+<h2 id="第九步：几个最值得记住的坑"><a href="#第九步：几个最值得记住的坑" class="headerlink" title="第九步：几个最值得记住的坑"></a>第九步：几个最值得记住的坑</h2>
+<p>前面说的那些之外，还有几个坑我印象特别深，每个都够你查半天。</p>
+<p>一是 64 位下用 ctypes 不显式设返回类型，句柄会被截断。GetClipboardData 返回的 64 位句柄被当成 32 位的整数，剪贴板永远读出来是空字符串——我一度还误判成 Ctrl+F 唤起搜索失败了，其实快捷键一直好好的。教训就是，64 位 Windows 上，任何返回指针或者句柄的 Win32 函数，都得显式设好返回类型。</p>
+<p>二是 BitBlt 截 Flutter 窗口只能拿到过期帧，这个前面第四步说了。</p>
+<p>三是最小化等于画面冻住。我专门做了个对照实验，发消息之后盯着看了七十秒，画面指纹一动不动；把窗口挪出屏幕也一样，挪回来才立刻恢复。企微最小化的时候就不渲染了，这是操作系统加 Flutter 的硬行为，绕不过去。</p>
+<p>四是 GetWindowRect 在最小化的时候不一定是负三万两千那样的坐标，微信最小化返回的是 314 乘 50 的小矩形。所以要用 IsIconic 判断，再用 GetWindowPlacement 拿还原矩形的位置。</p>
+<p>五是企微有好几个标题都叫"企业微信"的窗口，不判断现在停在哪一页，就会把工作台的"审批""打卡"当成消息，生成一堆垃圾待办。</p>
+<p>六是 @所有人被当成 @我，这个第五步说了。</p>
+<p>七是"无需回复"被误判成待办，也是第五步的事。</p>
+<p>八是改了代码，结果进程里跑的还是旧版本——把 <strong>pycache</strong> 删了再重启，别对着旧代码调半天。</p>
+<h2 id="最后：做到的和没做到的"><a href="#最后：做到的和没做到的" class="headerlink" title="最后：做到的和没做到的"></a>最后：做到的和没做到的</h2>
+<p>做到的部分（前提是企微窗口得看得见）：</p>
 <ul>
-<li>
-<p>先跑 <code>tools/test_hotkey.py k</code> 试试 <code>Ctrl+K</code>，好用就把配置里
-  <code>mark_read.search_key</code> 改成 <code>"k"</code>；</p>
-</li>
-<li>
-<p>或者直接鼠标点搜索框：设 <code>mark_read.click_search_offset = [160, 24]</code>。</p>
-</li>
+<li>打开企微，小组件自动弹出来；关掉，它自动退。</li>
+<li>自动抓新消息，AI 判断，钉到桌面，一键勾掉，顺便清掉角标。</li>
+<li>一个会话一张卡，按时间排，两级勾掉，群消息只收 @我的。</li>
 </ul>
-<blockquote>
-<p>注意一个产品细节：<strong>在企微里先读了消息，桌面上的固定内容不会被移除</strong>。
-桌面卡片只认你手动勾掉——这是刻意设计的，避免"看了一眼企微，待办就丢了"。</p>
-</blockquote>
-<hr />
-<h2 id="第八步：让它跟着企业微信自动启停"><a href="#第八步：让它跟着企业微信自动启停" class="headerlink" title="第八步：让它跟着企业微信自动启停"></a>第八步：让它跟着企业微信自动启停</h2>
-<p>一个看门狗脚本监听 <code>WXWork.exe</code> 进程：企微打开 → 自动拉起程序；
-企微关闭 → 自动退出（待办已存盘，不丢）。</p>
-<p>再加开机自启：在系统启动项放一个几 KB 的 vbs 入口，
-登录后静默常驻。<strong>但有一点必须说清：程序得由你双击 <code>Start.bat</code> 启动，
-或者等下次开机自动起来</strong>——从终端/自动化环境里拉起的进程会被系统回收，
-<code>Start-Process</code>、<code>wscript</code>、<code>schtasks</code> 全试过，都活不下来。</p>
-<hr />
-<h2 id="第九步：最值得记住的几个坑"><a href="#第九步：最值得记住的几个坑" class="headerlink" title="第九步：最值得记住的几个坑"></a>第九步：最值得记住的几个坑</h2>
-<p>34 个坑里挑最狠的 8 个，每个都够你查半天：</p>
-<ol>
-<li>
-<p><strong>64 位 ctypes 不设 <code>restype</code>，句柄被截断</strong>。<code>GetClipboardData</code> 返回的
-   64 位句柄被当成 32 位 <code>c_int</code>，剪贴板永远读成空字符串——
-   我因此一度误判"Ctrl+F 唤起搜索失败"，其实快捷键一直是好的。
-   <strong>教训：64 位 Windows 上，任何返回指针/句柄的 Win32 函数都必须显式设 <code>restype</code>。</strong></p>
-</li>
-<li>
-<p><strong><code>BitBlt</code> 抓 Flutter 窗口只能拿到过期帧</strong>（见第四步第 1 点）。</p>
-</li>
-<li>
-<p><strong>最小化 = 画面冻结</strong>。受控实验：用户发消息后盯 70 秒，画面指纹纹丝不动；
-   移到屏幕外也一样，移回屏幕内<strong>立刻</strong>恢复。企微最小化时停止渲染，
-   这是操作系统 + Flutter 的硬行为，绕不过去。</p>
-</li>
-<li>
-<p><strong><code>GetWindowRect</code> 在最小化时不一定是 <code>(-32000, -32000)</code></strong>——
-   微信最小化返回的是 <code>314x50</code> 的小矩形。所以要用 <code>IsIconic()</code> 判断，
-   再用 <code>GetWindowPlacement</code> 拿还原矩形。</p>
-</li>
-<li>
-<p><strong>企微有多个标题都叫"企业微信"的窗口</strong>，不判断当前停在哪一页，
-   就会把工作台的"审批""打卡"当成消息，生成一堆垃圾待办。</p>
-</li>
-<li>
-<p><strong><code>@所有人</code> 被当成 <code>@我</code></strong>（见第五步）。</p>
-</li>
-<li><strong>"无需回复"被误判成待办</strong>（见第五步）。</li>
-<li><strong>改了代码但进程里跑的是旧版本</strong>——删掉 <code>__pycache__</code> 再重启，
-   别对着旧代码debug半天。</li>
-</ol>
-<hr />
-<h2 id="最后：成果与边界"><a href="#最后：成果与边界" class="headerlink" title="最后：成果与边界"></a>最后：成果与边界</h2>
-<p><strong>做到了的</strong>（企微窗口可见时全自动）：</p>
+<p>没做到的（这些是客观限制，不是代码问题）：</p>
 <ul>
-<li>打开企微自动弹出小组件，关掉自动退出</li>
-<li>自动捕获新消息 → AI 判断 → 钉到桌面 → 一键勾掉 → 顺带清角标</li>
-<li>一会话一卡、按时间排、两级勾掉、群消息只收 @我</li>
+<li>企微最小化、挪出屏幕、或者停在工作台页的时候，读不到。你要是想眼不见为净，用别的窗口盖住它，或者扔到另一个虚拟桌面，这两种它照样读。</li>
+<li>用官方接口读聊天记录（公司没开会话内容存档）。</li>
+<li>读个人微信消息（官方没这接口）。</li>
 </ul>
-<p><strong>做不到的</strong>（客观限制，不是代码问题）：</p>
-<ul>
-<li>
-<p>企微<strong>最小化 / 移出屏幕 / 停在工作台页</strong>时读不到
-  （想眼不见为净，就用别的窗口盖住它，或扔到另一个虚拟桌面——这两种都照读不误）</p>
-</li>
-<li>
-<p>用官方接口读聊天记录（企业未开通「会话内容存档」）</p>
-</li>
-<li>读个人微信消息（官方无此 API）</li>
-</ul>
-<p><strong>唯一能根治"只要登录就一定读到"的路</strong>：让企业管理员开通
-<strong>「会话内容存档」</strong>（付费功能）。开通后服务端直接拿聊天记录，
-跟窗口状态完全无关。读取模块我已经写好备着了，企业一开通即用。</p>
-<p>完整源码和更细的踩坑记录在 GitHub：</p>
-<ul>
-<li>仓库：<a href="https://github.com/qinguobin/wecom-desktop-alert" target="_blank" rel="noopener">https://github.com/qinguobin/wecom-desktop-alert</a></li>
-<li><code>README.md</code>：功能清单 + 安装配置</li>
-<li><code>PITFALLS.md</code>：34 个坑，每个都有「症状 → 根因 → 解法」</li>
-</ul>
+<p>唯一能根治"只要登录就能读到"这条路，是让你们公司管理员去开通"会话内容存档"，这是个付费功能。开通之后服务端直接拿聊天记录，跟窗口状态完全没关系。读取的模块我已经提前写好了，公司一开通就能用。</p>
+<p>完整源码和更细的踩坑记录都放在 GitHub 上了，仓库地址是 https://github.com/qinguobin/wecom-desktop-alert ，里面的 README 是功能清单加安装配置，PITFALLS 是三十四个坑，每个都写了症状、根因、解法。</p>
     
     </div>
 
