@@ -144,6 +144,101 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="https://qinguobin.github.io/2026/10/24/diplay-install-guide/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="qinguobin">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Hexo">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2026/10/24/diplay-install-guide/" class="post-title-link" itemprop="url">手把手教你在车机上装 DiPlay（保姆级教程）</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建于: 2026-10-24 19:30:00" itemprop="dateCreated datePublished" datetime="2026-10-24T19:30:00+08:00">2026-10-24</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+      <p>这是我的第三篇博文。上一篇记录了把企业微信消息钉到桌面的失败尝试，这一篇来点实用的：给安卓车机装上 CarPlay。</p>
+<p>说白了就是两件事。一是 DiPlay，一个开源的 CarPlay 接收器，装在车机上，iPhone 就能投屏过来；二是 LANDrop，一个局域网传文件的工具，负责把 DiPlay 的安装包送进车机。</p>
+<p>为什么传个文件还要专门动用 LANDrop？因为车机这东西很尴尬：一般没有应用商店，插电脑也不一定认，开发者选项更是不知道藏在哪。折腾一圈你会发现，车机上唯一现成的下载通道就是它自带的浏览器。所以整个思路是：先用车机浏览器把 LANDrop 下下来装好，再让手机和车机连同一个网，用 LANDrop 把安装包传过去，最后在车机上安装调试。</p>
+<p>开始之前先交代两句。DiPlay 目前主要面向比亚迪的安卓车机（DiLink），其他品牌官方明说不保证能用；它还不是苹果认证的产品，属于社区公开预览版，iOS 一更新就有可能失效。想清楚了再往下看。</p>
+<h2 id="先认识一下两个主角"><a href="#先认识一下两个主角" class="headerlink" title="先认识一下两个主角"></a>先认识一下两个主角</h2>
+<p>DiPlay，GitHub 项目地址是 https://github.com/shihabal3amri/DiPlay ，最新版本 v0.2.21（2026 年 10 月 17 日发布的公开预览），安装包 DiPlay-0.2.21.apk，18 兆左右，要求安卓 7.0 以上。它不需要越狱、不需要买投屏盒子、不需要注册账号，USB 有线和无线都能连。无线支持三种方式：车载热点（默认推荐）、Wi-Fi Direct、已有 Wi-Fi 同一局域网。</p>
+<p>LANDrop，官网 https://landrop.app ，同样是开源项目，可以理解成跨平台的 AirDrop：同一局域网里的设备自动互相发现，点一下就传文件，不要数据线、不要账号、不走流量。它有 iOS、安卓、Windows、macOS、Linux 全平台的版本，我们用安卓版装车机，手机或电脑版当发送端。界面长这样（官方截图，iOS 版，安卓版布局类似）：</p>
+<p><img alt="LANDrop 应用界面（官方截图）" src="/images/diplay/landrop-iphone.png" /></p>
+<h2 id="第一步：用车机浏览器下载-LANDrop"><a href="#第一步：用车机浏览器下载-LANDrop" class="headerlink" title="第一步：用车机浏览器下载 LANDrop"></a>第一步：用车机浏览器下载 LANDrop</h2>
+<p>车机连上网（车流量卡、手机热点都行），打开车机自带的浏览器，地址栏直接输入下面这个官方直链，回车就能下载：</p>
+<p>https://releases.landrop.app/landrop-v2-flutter/LANDrop-flutter-latest-android.apk</p>
+<p>下载完在通知栏或浏览器的下载管理里点开，直接安装。如果车机提示"禁止安装未知来源应用"，去设置的安装权限里允许一下，装完可以再关回去。</p>
+<p>顺手把你手机（或电脑）上也装一份 LANDrop，后面要用它发包。电脑版下载地址：https://releases.landrop.app/landrop-v2-qt/LANDrop-latest-win.zip ，手机版可以在 LANDrop 官网扫码，或者直接用上面的安卓直链。</p>
+<h2 id="第二步：让车机和手机在同一个局域网"><a href="#第二步：让车机和手机在同一个局域网" class="headerlink" title="第二步：让车机和手机在同一个局域网"></a>第二步：让车机和手机在同一个局域网</h2>
+<p>LANDrop 靠局域网自动发现设备，所以两边必须在同一个网里。最省事的做法是开手机热点，让车机连上来；反过来用车机自带的热点、手机连上去也可以。没有网也不要紧，LANDrop 官网特意说了，热点环境下传文件不消耗流量。</p>
+<p>连好之后，车机和手机都把 LANDrop 打开，稍微等几秒，主界面里应该就能看到对方的设备名。能看到，第二步就算过关了。</p>
+<h2 id="第三步：在你手机上下载-DiPlay-安装包"><a href="#第三步：在你手机上下载-DiPlay-安装包" class="headerlink" title="第三步：在你手机上下载 DiPlay 安装包"></a>第三步：在你手机上下载 DiPlay 安装包</h2>
+<p>用手机浏览器打开 DiPlay 的发布页：</p>
+<p>https://github.com/shihabal3amri/DiPlay/releases</p>
+<p>最新的是 v0.2.21，把里面的 DiPlay-0.2.21.apk 下载下来（约 18MB）。懒得翻的话，直链在这里：</p>
+<p>https://github.com/shihabal3amri/DiPlay/releases/download/v0.2.21/DiPlay-0.2.21.apk</p>
+<p>注意认准官方发布页，别从第三方下载站拿包。介意安全的话，发布页里还有个 SHA256SUMS.txt，可以校验一下文件完整性。</p>
+<h2 id="第四步：用-LANDrop-把安装包传到车机"><a href="#第四步：用-LANDrop-把安装包传到车机" class="headerlink" title="第四步：用 LANDrop 把安装包传到车机"></a>第四步：用 LANDrop 把安装包传到车机</h2>
+<p>手机上打开 LANDrop，选中刚下载的 DiPlay-0.2.21.apk，发送目标是车机上的 LANDrop；车机端会弹出一个接受确认，点一下同意，文件就开始传了。18 兆的包在局域网里几秒钟的事，传完一般落在车机的 Download（下载）目录里，车机的文件管理器能找到。</p>
+<h2 id="第五步：在车机上安装"><a href="#第五步：在车机上安装" class="headerlink" title="第五步：在车机上安装"></a>第五步：在车机上安装</h2>
+<p>用车机文件管理器找到 APK，点开安装。几个注意事项官方文档里都写明了，我挑要紧的说：</p>
+<p>一是装在车机上，不是 iPhone 上，这是最容易犯迷糊的地方。二是要求安卓 7.0 以上，7.0 到 8.1 这一段官方说还没在实车上充分验证，装不装自己掂量。三是装之前把其他投屏类应用关掉，DiPlay 可以和原车的 DiAuto 共存，但连接时一次只能跑一个投影应用。四是以后升级尽量直接覆盖安装，不要卸载重装，覆盖能保留设置和配对记录；不同签名的包之间也不能互相覆盖升级。</p>
+<h2 id="第六步：连接-iPhone"><a href="#第六步：连接-iPhone" class="headerlink" title="第六步：连接 iPhone"></a>第六步：连接 iPhone</h2>
+<p>装好打开后，会看到这样的主界面（官方截图）：</p>
+<p><img alt="DiPlay 主界面（官方截图）" src="/images/diplay/diplay-home.png" /></p>
+<p>第一次会要权限：蓝牙（附近设备）、Wi-Fi 和定位（老版本安卓要）、麦克风（Siri 和通话用）、通知。用到哪个给哪个。</p>
+<p>有线连接最简单也最稳：iPhone 插车机的 USB 口，必须是数据口加数据线，纯充电口和充电线是不行的；然后在 DiPlay 里选 USB 连接，iPhone 上点信任。如果插上以后每隔几秒就掉线重连，去 设置、连接、USB 连接、iPhone 充电，把它调成"降低"或"低"，让 iPhone 充电慢一点换稳定。</p>
+<p>无线连接默认走车载热点：在 设置、连接、连接设置、车载热点 里保存热点名和密码，热点尽量开 5GHz；iPhone 保持蓝牙和 Wi-Fi 开着，并和车机完成蓝牙配对，然后点连接手机。配对正常的固件上，蓝牙握手会自动把热点信息给 iPhone，不用手动连。另外两种方式（Wi-Fi Direct、已有 Wi-Fi 同一局域网）在同一个连接设置里，走路由器的话记得把路由器的 AP 隔离关掉。</p>
+<h2 id="第七步：调优和排错"><a href="#第七步：调优和排错" class="headerlink" title="第七步：调优和排错"></a>第七步：调优和排错</h2>
+<p>画面先按官方给的保守参数来：帧率 30，图标文字用默认，"高效视频 HEVC"先关着；车机性能弱、画面卡，再把分辨率降到 80% 或 60%。这些都在设置页里（官方截图），改了分辨率和帧率要点"应用并重连"才生效，光选上是没用的：</p>
+<p><img alt="DiPlay 设置页（官方截图）" src="/images/diplay/diplay-settings.png" /></p>
+<p>CarPlay 界面里按住下滑（默认三根手指）能呼出快捷菜单。</p>
+<p>出了问题，DiPlay 自带诊断：设置、诊断、保存诊断报告，安卓 10 以上存在 Downloads/DiPlay 目录，老版本会申请存储权限，报告是个 txt。排查卡顿可以打开同一个页面里的 FPS 计数器，能直接看到帧率和解码耗时。无线怎么都连不上、或者重装后连不上，试试 设置、连接、无线连接帮助、重置 CarPlay Wi-Fi。CarPlay 画面四角透出车机壁纸的话，在 CarPlay 的设置菜单里选 Safe area、黑色圆角，把半径调到刚好盖住为止。</p>
+<p>要反馈问题就去 GitHub 提 issue，带上车型、固件和安卓版本、iPhone 的 iOS 版本、连接方式，但热点密码千万不要带上去。</p>
+<h2 id="最后说两句"><a href="#最后说两句" class="headerlink" title="最后说两句"></a>最后说两句</h2>
+<p>这套东西的本质，是社区从公开固件里还原出来的 CarPlay 接入能力，不是苹果官方认可的方案。能不能跑、稳不稳，很看车型、车机系统和 iOS 版本的组合，官方文档里给的都是"在某某实车上验证过"这种很具体的说法，而不是打包票。我的看法是：能跑起来就是赚了，跑不起来也当学了一圈车机安卓的玩法。祝折腾顺利。</p>
+    
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
     <link itemprop="mainEntityOfPage" href="https://qinguobin.github.io/2026/10/17/wecom-pin-tutorial/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
